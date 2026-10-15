@@ -1,0 +1,25 @@
+# Build, packages, Unity validation projects and runtime captures
+**/bin/
+**/obj/
+/artifacts/
+/TestResults/
+/BepInEx/
+**/Library/
+**/Temp/
+**/Logs/
+**/UserSettings/
+
+# Local editor and agent state
+.vs/
+.vscode/
+.idea/
+.claude/
+.codex/
+.agents/
+*.user
+*.suo
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db

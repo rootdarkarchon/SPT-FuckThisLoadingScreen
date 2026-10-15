@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>FTLS.LevelStageTimer</AssemblyName>
+    <Version>0.7.0</Version>
+    <RootNamespace>FTLS.LevelStageTimer</RootNamespace>
+    <Authors>rootdarkarchon</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Deterministic>true</Deterministic>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <OutputPath>../../obj/FTLS.LevelStageTimer/plugin/</OutputPath>
+    <SptInstallPath Condition="'$(SptInstallPath)' == ''">$(SPT_INSTALL_PATH)</SptInstallPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup><Reference><Private>false</Private></Reference></ItemDefinitionGroup>
+  <ItemGroup>
+    <Compile Include="Recorder.cs"/><Compile Include="LoadingHooks.cs"/><Compile Include="HookCatalog.cs"/><Compile Include="DetailProbes.cs"/><Compile Include="SceneProbes.cs"/><Compile Include="SceneActivation.cs"/><Compile Include="RetentionProbes.cs"/><Compile Include="Plugin.cs"/>
+    <Reference Include="BepInEx"><HintPath>$(SptInstallPath)/BepInEx/core/BepInEx.dll</HintPath></Reference>
+    <Reference Include="0Harmony"><HintPath>$(SptInstallPath)/BepInEx/core/0Harmony.dll</HintPath></Reference>
+    <Reference Include="UnityEngine"><HintPath>$(SptInstallPath)/EscapeFromTarkov_Data/Managed/UnityEngine.dll</HintPath></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(SptInstallPath)/EscapeFromTarkov_Data/Managed/UnityEngine.CoreModule.dll</HintPath></Reference>
+  </ItemGroup>
+  <Target Name="ValidateInstallPath" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(SptInstallPath)/EscapeFromTarkov_Data/Managed/Assembly-CSharp.dll')" Text="Set SptInstallPath or SPT_INSTALL_PATH to your EFT 40743 / SPT 4.1 installation." />
+  </Target>
+</Project>
