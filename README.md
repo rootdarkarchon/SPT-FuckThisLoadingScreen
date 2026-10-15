@@ -73,6 +73,7 @@ apply to the next attempt; restart the game for controlled comparisons.
 | Audio / Reader Batch Size | 1200 | Native: 300; range: 300–4800 |
 | Memory / Non-Collecting Diagnostic Measurements | true | false retains native diagnostic queries |
 | Experimental / Parallel Scene Loading | false | Optional unbounded scheduling comparison |
+| Debug / Write Loading Reports | false | true enables per-load report files and summary logs |
 
 Bounded activation takes precedence over the experimental parallel toggle.
 To compare native scene scheduling, turn **both** scene scheduling toggles off.
@@ -82,9 +83,11 @@ settings when ownership has changed.
 
 ## Reports and optional stage timer
 
-FTLS writes an option snapshot, outcome and bounded counters to
-`BepInEx/FuckThisLoadingScreen/` after each attempt, including frame-cap and
-scene-scheduling CSVs. These reports are exported after the measured loading run.
+Reports are **off by default**. Enable **Debug / Write Loading Reports** to
+write per-load option snapshots, outcomes and bounded counters to the BepInEx
+log and `BepInEx/FuckThisLoadingScreen/`, including frame-cap and scene-scheduling
+CSVs. Enabled reports are exported after the measured loading run. The toggle
+is frozen per attempt and does not change any loading optimization.
 
 For detailed stage, per-scene, activation and callback timings, install the
 separate **FTLS Level Stage Timer** package. It is optional and is not included

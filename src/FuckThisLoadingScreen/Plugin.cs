@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace FuckThisLoadingScreen
 {
-    [BepInPlugin("com.rootdarkarchon.fuckthisloadingscreen", "FuckThisLoadingScreen", "1.0.0")]
+    [BepInPlugin("com.rootdarkarchon.fuckthisloadingscreen", "FuckThisLoadingScreen", "1.0.1")]
     [BepInDependency("com.SPT.custom", BepInDependency.DependencyFlags.HardDependency)]
     [BepInDependency("com.fika.core", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("com.rootdarkarchon.ftls.levelstagetimer", BepInDependency.DependencyFlags.SoftDependency)]
@@ -22,13 +22,14 @@ namespace FuckThisLoadingScreen
         private LoadingPolicy policy;
         private sealed class RunReport { internal string Summary; internal LoadingRun Run; }
         private readonly Queue<RunReport> reports = new Queue<RunReport>();
-        private ConfigEntry<bool> master, audio, measurements, parallel, spawnZones, sceneProbes, lootPriority, frameOverride, boundedScenes;
+        private ConfigEntry<bool> master, audio, measurements, parallel, spawnZones, sceneProbes, lootPriority, frameOverride, boundedScenes, debugReports;
         private ConfigEntry<int> batch, frameLimit, sceneWindow;
         private ConfigEntry<LoadingPriority> priority;
 
         private void Awake()
         {
             master = Config.Bind("General", "Enabled", true, "Master switch. Options are frozen at the start of each loading attempt; changes apply to the next attempt.");
+            debugReports = Config.Bind("Debug", "Write Loading Reports", false, "Write per-load option/counter summaries to the BepInEx log and TXT/CSV reports to BepInEx/FuckThisLoadingScreen. Off by default. Options freeze per attempt; changes apply to the next loading attempt.");
             audio = Config.Bind("Audio", "Larger Reader Batches", true, "Use the configured audio bake reader batch during raid map initialization. Off retains native batches of 300.");
             batch = Config.Bind("Audio", "Reader Batch Size", 1200,
                 new ConfigDescription("Audio records per coroutine batch. 300 is native; 1200 is the first test setting. Larger batches can increase main-thread slices.", new AcceptableValueRange<int>(300, 4800)));
@@ -98,7 +99,7 @@ namespace FuckThisLoadingScreen
         private Options ReadOptions() => new Options { Enabled = master.Value, AudioBatching = audio.Value,
             AudioBatchSize = Math.Max(300, Math.Min(4800, batch.Value)), NonCollectingMeasurements = measurements.Value,
             Priority = priority.Value, ParallelScenes = parallel.Value, ScopedSpawnZones = spawnZones.Value, SkipBuiltInSceneProbes = sceneProbes.Value, LootBundlePriority = lootPriority.Value,
-            FrameCapOverride = frameOverride.Value, LoadingFrameLimit = frameLimit.Value, BoundedScenes = boundedScenes.Value, SceneWindow = sceneWindow.Value };
+            FrameCapOverride = frameOverride.Value, LoadingFrameLimit = frameLimit.Value, BoundedScenes = boundedScenes.Value, SceneWindow = sceneWindow.Value, DebugReports = debugReports.Value };
         internal static void InstallLootBundlePriority(Harmony target, Func<string, Type> find)
         {
             Type game = find("EFT.BaseLocalGame`1").MakeGenericType(find("EFT.EftGamePlayerOwner"));
@@ -150,7 +151,7 @@ namespace FuckThisLoadingScreen
             while (reports.Count > 0)
             {
                 RunReport report = reports.Dequeue();
-                string text = "FuckThisLoadingScreen 1.0.0 | EFT MVID=" + SupportedModuleId + " | " + report.Summary;
+                string text = "FuckThisLoadingScreen 1.0.1 | EFT MVID=" + SupportedModuleId + " | " + report.Summary;
                 Logger.LogInfo(text);
                 try
                 {
