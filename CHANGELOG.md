@@ -23,7 +23,7 @@ unattributed. Startup behavior in the main FTLS plugin is unchanged.
   remove 998 ms of requested delay. These counters do not measure the actual
   raid-loading improvement.
 - **Texture inventory dump** (Debug / Dump Loaded Textures, action). Setting it to true
-  writes one texture inventory to `BepInEx/FuckThisLoadingScreen/TextureInventory`,
+  writes one texture inventory to `BepInEx/config/FuckThisLoadingScreen/dumps/texture-inventory`,
   then resets.
 - **Hideout research reports** (Debug / Write Hideout Research Reports, default false,
   restart required). See "Hideout research reports" below.
@@ -43,6 +43,18 @@ unattributed. Startup behavior in the main FTLS plugin is unchanged.
   below.
 - **Bot preload delay** sizes the initial bot-profile batch wait at 1 ms instead of
   500 ms; see Added.
+- **Data locations:** runtime files moved from `BepInEx/FuckThisLoadingScreen/` to
+  `BepInEx/config/FuckThisLoadingScreen/` (loading reports under `captures/`, hideout
+  research under `captures/`, texture inventory under `dumps/`, the streamable texture
+  index under `cache/`). Existing files are moved once on first start, with one log
+  line; the old folder is removed if it ends up empty. The `.cfg` file is unchanged.
+- **Logging:** by default FTLS writes one initialisation line plus warnings and errors.
+  Other output is `[debug]` lines behind the new **Debug / Logging** option (default false).
+- **Configuration menu:** entries are grouped into numbered categories "1. General" to
+  "9. Debug"; debug, diagnostic and experimental entries sit under "9. Debug" and are
+  marked advanced. Section and key names are unchanged.
+- **Stage timer:** the optional level stage timer is no longer in this tree. It lives on
+  branch `research/startup`.
 
 ### Fixed
 
@@ -109,7 +121,7 @@ Off by default. Each needs a restart after changing.
   that holds 0 is changed. Offsets come from each bundle's texture metadata
   (AssetsTools.NET), found by a background scan at startup (half the logical processors,
   at most 8; progress logged every 10 s) and saved to
-  `BepInEx/FuckThisLoadingScreen/StreamableTextureIndex.txt` (path, length, timestamp,
+  `BepInEx/config/FuckThisLoadingScreen/cache/StreamableTextureIndex.txt` (path, length, timestamp,
   offsets); later launches rescan only changed bundles. Loads never scan: a bundle not
   indexed yet loads natively. No bundle is copied or buffered in memory. Bundles with
   nothing to patch, compressed bundles, map data, mod bundles and loads already
@@ -149,7 +161,7 @@ Medium 15 GB; Medium + Apply Texture Quality 10.8 GB (Texture2D and arrays about
 Enable **Debug / Write Hideout Research Reports** and restart. The observer records
 background hideout preloads as well as entry, so there can be a preload-only capture
 before the entry capture. Output is under
-`BepInEx/FuckThisLoadingScreen/HideoutResearch/<UTC timestamp-id>/`:
+`BepInEx/config/FuckThisLoadingScreen/captures/hideout-research/<UTC timestamp-id>/`:
 
 - `capture.txt`: exact hook coverage, EFT/Unity identities, FTLS option snapshot,
   bounds and interpretation notes.

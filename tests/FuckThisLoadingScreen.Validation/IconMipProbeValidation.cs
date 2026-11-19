@@ -136,14 +136,14 @@ internal static class IconMipProbeValidation
     }
     private sealed class Pump : SynchronizationContext
     {
-        private readonly Queue<Action> queue = new Queue<Action>();
-        public override void Post(SendOrPostCallback callback, object state) { lock (queue) queue.Enqueue(() => callback(state)); }
+        private readonly Queue<Action> _queue = new Queue<Action>();
+        public override void Post(SendOrPostCallback callback, object state) { lock (_queue) _queue.Enqueue(() => callback(state)); }
         internal void Until(Task task)
         {
             var deadline = DateTime.UtcNow.AddSeconds(10);
             while (!task.IsCompleted)
             {
-                Action action = null; lock (queue) if (queue.Count > 0) action = queue.Dequeue();
+                Action action = null; lock (_queue) if (_queue.Count > 0) action = _queue.Dequeue();
                 if (action != null) action(); else Thread.Sleep(1);
                 if (DateTime.UtcNow > deadline) throw new TimeoutException("Icon probe native fixture did not finish");
             }

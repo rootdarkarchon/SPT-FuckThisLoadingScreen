@@ -29,9 +29,9 @@ namespace FuckThisLoadingScreen
         internal static Func<Func<bool>> CaptureActive;
         // Capture the owning run before any await. The callback must not throw.
         internal static Func<Action<BoundedSceneStats>> BeginReport;
-        private static Func<object, bool> allowActivation;
-        private static Func<object, CancellationToken> cancellation;
-        private static Func<object, IList> operations;
+        private static Func<object, bool> _allowActivation;
+        private static Func<object, CancellationToken> _cancellation;
+        private static Func<object, IList> _operations;
 
         private static class Native<TManager, TKey, TOperation> where TOperation : IOperation
         {
@@ -44,12 +44,12 @@ namespace FuckThisLoadingScreen
         private static bool Prefix<TManager, TKey, TOperation>(object __instance, IList<TKey> scenes,
             IProgress<float> progress, ref Task __result) where TOperation : IOperation
         {
-            if (!CanReplace(Enabled?.Invoke() == true, allowActivation(__instance)) || CaptureActive == null) return true;
+            if (!CanReplace(Enabled?.Invoke() == true, _allowActivation(__instance)) || CaptureActive == null) return true;
             Func<bool> active = CaptureActive();
             if (active == null || !active()) return true;
             var manager = Native<TManager, TKey, TOperation>.Manager(__instance);
-            IList nativeOperations = operations(__instance);
-            CancellationToken token = cancellation(__instance);
+            IList nativeOperations = _operations(__instance);
+            CancellationToken token = _cancellation(__instance);
             var stats = new BoundedSceneStats();
             Action<BoundedSceneStats> finished = BeginReport?.Invoke();
             int window = Math.Max(1, Math.Min(4, Window?.Invoke() ?? 2));
@@ -197,9 +197,9 @@ namespace FuckThisLoadingScreen
             MethodInfo load = AccessTools.DeclaredMethod(extension, "LoadScene", new[] { manager, key, typeof(LoadSceneMode), typeof(bool), typeof(Action<float>) });
             if (direct?.ReturnType != typeof(Task) || load?.ReturnType != operation || !load.IsStatic)
                 throw new MissingMethodException("Bounded scene scheduling ABI");
-            allowActivation = Field<bool>(preset, "_allowSceneActivation");
-            cancellation = Field<CancellationToken>(preset, "_cancellationToken");
-            operations = Field<IList>(preset, "_loadSceneOperations");
+            _allowActivation = Field<bool>(preset, "_allowSceneActivation");
+            _cancellation = Field<CancellationToken>(preset, "_cancellationToken");
+            _operations = Field<IList>(preset, "_loadSceneOperations");
             var types = new[] { manager, key, operation };
             AccessTools.Method(typeof(BoundedScenes), nameof(Bind)).MakeGenericMethod(types).Invoke(null, new object[] { preset, load });
             harmony.Patch(direct, prefix: new HarmonyMethod(AccessTools.Method(typeof(BoundedScenes), nameof(Prefix)).MakeGenericMethod(types)));

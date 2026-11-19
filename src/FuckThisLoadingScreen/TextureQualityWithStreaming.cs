@@ -11,7 +11,7 @@ namespace FuckThisLoadingScreen
     // on; streaming then manages the streamable textures below that limit.
     internal static class TextureQualityWithStreaming
     {
-        private static Func<int, int> mipBias;
+        private static Func<int, int> _mipBias;
         internal static Func<bool> Enabled;
         internal static MethodInfo Change;
         internal static Action<string> Log;
@@ -26,7 +26,7 @@ namespace FuckThisLoadingScreen
             MethodInfo bias = AccessTools.DeclaredMethod(group, "TextureQualityToMipBias", new[] { typeof(int) });
             if (bias == null || !bias.IsStatic || bias.ReturnType != typeof(int))
                 throw new MissingMethodException(group.FullName, "static int TextureQualityToMipBias(int)");
-            mipBias = (Func<int, int>)Delegate.CreateDelegate(typeof(Func<int, int>), bias);
+            _mipBias = (Func<int, int>)Delegate.CreateDelegate(typeof(Func<int, int>), bias);
             Enabled = enabled;
             harmony.Patch(Change, postfix: new HarmonyMethod(typeof(TextureQualityWithStreaming), nameof(Postfix)));
         }
@@ -37,7 +37,7 @@ namespace FuckThisLoadingScreen
             {
                 // Streaming off: EFT already applied the same limit.
                 if (!__0 || Enabled == null || !Enabled()) return;
-                int limit = mipBias(__1);
+                int limit = _mipBias(__1);
                 QualitySettings.globalTextureMipmapLimit = limit;
                 Log?.Invoke("Texture quality " + __1 + " keeps mipmap limit " + limit + " with mip streaming.");
             }

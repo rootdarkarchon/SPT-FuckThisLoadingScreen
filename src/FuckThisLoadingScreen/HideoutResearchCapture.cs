@@ -15,44 +15,44 @@ namespace FuckThisLoadingScreen
         internal const int MaxSpans = 2048, MaxSamples = 1400, MaxQueue = 8192;
         internal const int MaxIconRows = 8192;
         internal const int MaxDecalRows = 65536, MaxDecalBindings = 4096;
-        private int decalRows, decalBindings;
-        private double lastDecal = -10000;
+        private int _decalRows, _decalBindings;
+        private double _lastDecal = -10000;
         internal const string EventHeader = "elapsed_ms,span_id,stage,event,status,duration_ms,detail";
-        private readonly object gate = new object();
-        private readonly Queue<(byte Kind, string Row)> queue = new Queue<(byte, string)>();
-        private readonly Dictionary<int, HideoutResearchSpan> open = new Dictionary<int, HideoutResearchSpan>();
-        private readonly AutoResetEvent wake = new AutoResetEvent(false);
-        private readonly Func<double> clock;
-        private readonly Func<string> workerSnapshot;
-        private readonly Thread writer;
-        private readonly double started;
-        private double lastMain, lastActivity, entryFinished;
-        private int spanCount, sampleCount, dropped, entries, logCount, iconRows;
-        private int activeIcons;
-        private bool entrySeen, closed;
-        private string closeReason, error;
+        private readonly object _gate = new object();
+        private readonly Queue<(byte Kind, string Row)> _queue = new Queue<(byte, string)>();
+        private readonly Dictionary<int, HideoutResearchSpan> _open = new Dictionary<int, HideoutResearchSpan>();
+        private readonly AutoResetEvent _wake = new AutoResetEvent(false);
+        private readonly Func<double> _clock;
+        private readonly Func<string> _workerSnapshot;
+        private readonly Thread _writer;
+        private readonly double _started;
+        private double _lastMain, _lastActivity, _entryFinished;
+        private int _spanCount, _sampleCount, _dropped, _entries, _logCount, _iconRows;
+        private int _activeIcons;
+        private bool _entrySeen, _closed;
+        private string _closeReason, _error;
         internal readonly string DirectoryPath;
         internal static double Now => Stopwatch.GetTimestamp() * 1000.0 / Stopwatch.Frequency;
-        internal double Elapsed => clock() - started;
-        internal bool Closed { get { lock (gate) return closed; } }
-        internal string Error { get { lock (gate) return error; } }
+        internal double Elapsed => _clock() - _started;
+        internal bool Closed { get { lock (_gate) return _closed; } }
+        internal string Error { get { lock (_gate) return _error; } }
 
         internal HideoutResearchCapture(string directory, string metadata, string sampleHeader, Func<double> clock = null, Func<string> workerSnapshot = null)
         {
-            DirectoryPath = directory; this.clock = clock ?? (() => Now); this.workerSnapshot = workerSnapshot; started = this.clock();
-            writer = new Thread(() => Write(metadata, sampleHeader)) { IsBackground = true, Name = "FTLS hideout research writer" };
-            writer.Start();
+            DirectoryPath = directory; this._clock = clock ?? (() => Now); this._workerSnapshot = workerSnapshot; _started = this._clock();
+            _writer = new Thread(() => Write(metadata, sampleHeader)) { IsBackground = true, Name = "FTLS hideout research writer" };
+            _writer.Start();
         }
 
         internal HideoutResearchSpan Begin(string stage, bool entry = false, string detail = "")
         {
-            lock (gate)
+            lock (_gate)
             {
-                if (closed) return null;
-                if (spanCount >= MaxSpans) { dropped++; return null; }
-                var span = new HideoutResearchSpan(this, ++spanCount, stage, Elapsed, entry);
-                open.Add(span.Id, span); lastActivity = Elapsed;
-                if (entry) { entrySeen = true; entries++; }
+                if (_closed) return null;
+                if (_spanCount >= MaxSpans) { _dropped++; return null; }
+                var span = new HideoutResearchSpan(this, ++_spanCount, stage, Elapsed, entry);
+                _open.Add(span.Id, span); _lastActivity = Elapsed;
+                if (entry) { _entrySeen = true; _entries++; }
                 Event(span, "begin", "", "", detail);
                 return span;
             }
@@ -60,73 +60,73 @@ namespace FuckThisLoadingScreen
 
         internal void Finish(HideoutResearchSpan span, string status)
         {
-            lock (gate)
+            lock (_gate)
             {
-                if (closed || !open.Remove(span.Id)) return;
-                lastActivity = Elapsed;
-                if (span.Entry && --entries == 0) entryFinished = Elapsed;
+                if (_closed || !_open.Remove(span.Id)) return;
+                _lastActivity = Elapsed;
+                if (span.Entry && --_entries == 0) _entryFinished = Elapsed;
                 Event(span, "end", status, Number(Elapsed - span.Started), "");
             }
         }
 
         internal void LaunchReturned(HideoutResearchSpan span)
         {
-            lock (gate) if (!closed) Event(span, "launch-return", "", Number(Elapsed - span.Started), "Synchronous kickoff only; task lifetime is the end row.");
+            lock (_gate) if (!_closed) Event(span, "launch-return", "", Number(Elapsed - span.Started), "Synchronous kickoff only; task lifetime is the end row.");
         }
 
-        internal void Pulse() { lock (gate) if (!closed) lastMain = Elapsed; }
+        internal void Pulse() { lock (_gate) if (!_closed) _lastMain = Elapsed; }
         internal void Sample(string values)
         {
-            lock (gate)
+            lock (_gate)
             {
-                if (closed) return;
-                if (sampleCount >= MaxSamples) { dropped++; return; }
-                sampleCount++; Enqueue(true, Number(Elapsed) + "," + values);
+                if (_closed) return;
+                if (_sampleCount >= MaxSamples) { _dropped++; return; }
+                _sampleCount++; Enqueue(true, Number(Elapsed) + "," + values);
             }
         }
         internal void Note(string stage, string detail)
-        { lock (gate) if (!closed) Enqueue(false, Number(Elapsed) + ",0," + Quote(stage) + ",note,,," + Quote(detail)); }
+        { lock (_gate) if (!_closed) Enqueue(false, Number(Elapsed) + ",0," + Quote(stage) + ",note,,," + Quote(detail)); }
         internal void StreamingLog(string message)
-        { lock (gate) if (!closed && logCount++ < 50) Note("streaming-log", message.Length <= 1024 ? message : message.Substring(0, 1024)); }
+        { lock (_gate) if (!_closed && _logCount++ < 50) Note("streaming-log", message.Length <= 1024 ? message : message.Substring(0, 1024)); }
         internal bool ReserveIconRow()
         {
-            lock (gate)
+            lock (_gate)
             {
-                if (closed) return false;
-                if (iconRows >= MaxIconRows) { dropped++; return false; }
-                iconRows++; return true;
+                if (_closed) return false;
+                if (_iconRows >= MaxIconRows) { _dropped++; return false; }
+                _iconRows++; return true;
             }
         }
         internal void IconRow(string values)
-        { lock (gate) if (!closed) { lastActivity = Elapsed; EnqueueKind(2, Number(Elapsed) + "," + values); } }
+        { lock (_gate) if (!_closed) { _lastActivity = Elapsed; EnqueueKind(2, Number(Elapsed) + "," + values); } }
         internal bool EnterIcon()
-        { lock (gate) { if (closed) return false; activeIcons++; lastActivity = Elapsed; return true; } }
+        { lock (_gate) { if (_closed) return false; _activeIcons++; _lastActivity = Elapsed; return true; } }
         internal void ExitIcon()
-        { lock (gate) { activeIcons = Math.Max(0, activeIcons - 1); lastActivity = Elapsed; if (entrySeen && entries == 0) entryFinished = Elapsed; } Signal(); }
-        internal void DecalActivity() { lock (gate) if (!closed) { lastDecal = Elapsed; lastActivity = Elapsed; } }
+        { lock (_gate) { _activeIcons = Math.Max(0, _activeIcons - 1); _lastActivity = Elapsed; if (_entrySeen && _entries == 0) _entryFinished = Elapsed; } Signal(); }
+        internal void DecalActivity() { lock (_gate) if (!_closed) { _lastDecal = Elapsed; _lastActivity = Elapsed; } }
         internal void DecalRow(bool binding, string values)
         {
-            lock (gate)
+            lock (_gate)
             {
-                if (closed) return;
-                if (binding ? decalBindings >= MaxDecalBindings : decalRows >= MaxDecalRows) { dropped++; return; }
-                if (binding) decalBindings++; else decalRows++;
+                if (_closed) return;
+                if (binding ? _decalBindings >= MaxDecalBindings : _decalRows >= MaxDecalRows) { _dropped++; return; }
+                if (binding) _decalBindings++; else _decalRows++;
                 EnqueueKind(binding ? (byte)4 : (byte)3, Number(Elapsed) + "," + values);
             }
         }
 
         internal void Close(string reason)
         {
-            lock (gate) if (!closed) { closeReason = reason; Seal(reason); }
+            lock (_gate) if (!_closed) { _closeReason = reason; Seal(reason); }
             Signal();
         }
-        internal bool Join(int milliseconds) => writer.Join(milliseconds);
+        internal bool Join(int milliseconds) => _writer.Join(milliseconds);
         private void Seal(string reason)
         {
-            foreach (var span in open.Values) Event(span, "end", "incomplete-at-" + reason, Number(Elapsed - span.Started), "No completion was observed.");
-            open.Clear();
-            Enqueue(false, Number(Elapsed) + ",0,capture,end," + Quote(reason) + ",," + Quote("dropped_rows=" + dropped));
-            closed = true;
+            foreach (var span in _open.Values) Event(span, "end", "incomplete-at-" + reason, Number(Elapsed - span.Started), "No completion was observed.");
+            _open.Clear();
+            Enqueue(false, Number(Elapsed) + ",0,capture,end," + Quote(reason) + ",," + Quote("dropped_rows=" + _dropped));
+            _closed = true;
         }
         private void Event(HideoutResearchSpan span, string kind, string status, string duration, string detail) =>
             Enqueue(false, Number(Elapsed) + "," + span.Id + "," + Quote(span.Stage) + "," + kind + "," + Quote(status) + "," + duration + "," + Quote(detail));
@@ -134,10 +134,10 @@ namespace FuckThisLoadingScreen
             => EnqueueKind(sample ? (byte)1 : (byte)0, row);
         private void EnqueueKind(byte kind, string row)
         {
-            if (queue.Count >= MaxQueue) { dropped++; return; }
-            queue.Enqueue((kind, row)); Signal();
+            if (_queue.Count >= MaxQueue) { _dropped++; return; }
+            _queue.Enqueue((kind, row)); Signal();
         }
-        private void Signal() { try { wake.Set(); } catch (ObjectDisposedException) { } }
+        private void Signal() { try { _wake.Set(); } catch (ObjectDisposedException) { } }
 
         private void Write(string metadata, string sampleHeader)
         {
@@ -151,7 +151,7 @@ namespace FuckThisLoadingScreen
                 using (var icons = new StreamWriter(Path.Combine(DirectoryPath, "icon-mips.csv"), false, new UTF8Encoding(false)))
                 using (var decalMips = new StreamWriter(Path.Combine(DirectoryPath, "decal-mips.csv"), false, new UTF8Encoding(false)))
                 using (var decalBindingsFile = new StreamWriter(Path.Combine(DirectoryPath, "decal-bindings.csv"), false, new UTF8Encoding(false)))
-                using (var workerState = workerSnapshot == null ? null : new StreamWriter(Path.Combine(DirectoryPath, "worker.csv"), false, new UTF8Encoding(false)))
+                using (var workerState = _workerSnapshot == null ? null : new StreamWriter(Path.Combine(DirectoryPath, "worker.csv"), false, new UTF8Encoding(false)))
                 {
                     events.WriteLine(EventHeader); samples.WriteLine(sampleHeader);
                     icons.WriteLine(IconMipProbe.Header);
@@ -162,41 +162,41 @@ namespace FuckThisLoadingScreen
                     while (true)
                     {
                         bool finished;
-                        lock (gate)
+                        lock (_gate)
                         {
                             double now = Elapsed;
-                            if (!closed && now >= 600000) { closeReason = "timeout-600s"; Seal(closeReason); }
-                            if (!closed && entrySeen && entries == 0 && activeIcons == 0 && now - entryFinished >= 10000 && now - lastDecal >= 10000) { closeReason = "entry-tail-complete"; Seal(closeReason); }
-                            if (!closed && !entrySeen && activeIcons == 0 && open.Count == 0 && now - lastActivity >= 30000) { closeReason = "preload-idle"; Seal(closeReason); }
-                            finished = closed;
+                            if (!_closed && now >= 600000) { _closeReason = "timeout-600s"; Seal(_closeReason); }
+                            if (!_closed && _entrySeen && _entries == 0 && _activeIcons == 0 && now - _entryFinished >= 10000 && now - _lastDecal >= 10000) { _closeReason = "entry-tail-complete"; Seal(_closeReason); }
+                            if (!_closed && !_entrySeen && _activeIcons == 0 && _open.Count == 0 && now - _lastActivity >= 30000) { _closeReason = "preload-idle"; Seal(_closeReason); }
+                            finished = _closed;
                         }
                         // Never hold the producer lock while doing disk I/O.
                         for (int i = 0; i < MaxQueue; i++)
                         {
                             (byte Kind, string Row) row;
-                            lock (gate) { if (queue.Count == 0) break; row = queue.Dequeue(); }
+                            lock (_gate) { if (_queue.Count == 0) break; row = _queue.Dequeue(); }
                             (row.Kind == 4 ? decalBindingsFile : row.Kind == 3 ? decalMips : row.Kind == 2 ? icons : row.Kind == 1 ? samples : events).WriteLine(row.Row);
                         }
                         if (Elapsed >= nextFlush || finished)
                         {
                             string row;
-                            lock (gate)
+                            lock (_gate)
                             {
                                 var stages = new List<string>();
-                                foreach (var span in open.Values) { if (stages.Count == 16) break; stages.Add(span.Id + ":" + span.Stage); }
-                                row = Number(Elapsed) + "," + Number(lastMain) + "," + Number(Elapsed - lastMain) + "," + open.Count + "," + sampleCount + "," + dropped + "," + Quote(string.Join(" | ", stages)) + "," + Quote(closeReason ?? "recording");
+                                foreach (var span in _open.Values) { if (stages.Count == 16) break; stages.Add(span.Id + ":" + span.Stage); }
+                                row = Number(Elapsed) + "," + Number(_lastMain) + "," + Number(Elapsed - _lastMain) + "," + _open.Count + "," + _sampleCount + "," + _dropped + "," + Quote(string.Join(" | ", stages)) + "," + Quote(_closeReason ?? "recording");
                             }
                             heartbeat.WriteLine(row);
-                            if (workerState != null) workerState.WriteLine(Number(Elapsed) + "," + workerSnapshot());
+                            if (workerState != null) workerState.WriteLine(Number(Elapsed) + "," + _workerSnapshot());
                             events.Flush(); samples.Flush(); heartbeat.Flush(); icons.Flush(); decalMips.Flush(); decalBindingsFile.Flush(); workerState?.Flush(); nextFlush = Elapsed + 1000;
                         }
                         if (finished) break;
-                        wake.WaitOne(250);
+                        _wake.WaitOne(250);
                     }
                 }
             }
-            catch (Exception failure) { lock (gate) { error = failure.GetType().Name + ": " + failure.Message; closed = true; } }
-            finally { wake.Dispose(); }
+            catch (Exception failure) { lock (_gate) { _error = failure.GetType().Name + ": " + failure.Message; _closed = true; } }
+            finally { _wake.Dispose(); }
         }
 
         internal static string Number(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);

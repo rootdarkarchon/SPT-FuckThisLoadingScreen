@@ -14,22 +14,22 @@ namespace FuckThisLoadingScreen
     internal sealed class TextureWorkerTeardown
     {
         internal static TextureWorkerTeardown Active;
-        private readonly Func<bool> enabled;
-        private readonly Action<string> warning;
-        private readonly int mainThread = Environment.CurrentManagedThreadId;
-        private readonly FieldInfo ownedTrees, trees, worker, source, token;
-        private bool warned;
+        private readonly Func<bool> _enabled;
+        private readonly Action<string> _warning;
+        private readonly int _mainThread = Environment.CurrentManagedThreadId;
+        private readonly FieldInfo _ownedTrees, _trees, _worker, _source, _token;
+        private bool _warned;
         internal readonly MethodInfo Clear;
 
         private TextureWorkerTeardown(Type renderer, Type tree, Func<bool> enabled, Action<string> warning)
         {
-            this.enabled = enabled; this.warning = warning;
-            ownedTrees = RequireField(renderer, "_texturesQuadTrees", false);
-            trees = RequireField(tree, "_trees", true); worker = RequireField(tree, "_workThreads", true);
-            source = RequireField(tree, "_terminateTokenSource", true); token = RequireField(tree, "_terminateToken", true);
-            if (!ownedTrees.FieldType.IsGenericType || ownedTrees.FieldType.GetGenericTypeDefinition() != typeof(Dictionary<,>) || ownedTrees.FieldType.GetGenericArguments()[1] != tree ||
-                trees.FieldType != typeof(HashSet<>).MakeGenericType(tree) || worker.FieldType != typeof(Thread) ||
-                source.FieldType != typeof(CancellationTokenSource) || token.FieldType != typeof(CancellationToken))
+            this._enabled = enabled; this._warning = warning;
+            _ownedTrees = RequireField(renderer, "_texturesQuadTrees", false);
+            _trees = RequireField(tree, "_trees", true); _worker = RequireField(tree, "_workThreads", true);
+            _source = RequireField(tree, "_terminateTokenSource", true); _token = RequireField(tree, "_terminateToken", true);
+            if (!_ownedTrees.FieldType.IsGenericType || _ownedTrees.FieldType.GetGenericTypeDefinition() != typeof(Dictionary<,>) || _ownedTrees.FieldType.GetGenericArguments()[1] != tree ||
+                _trees.FieldType != typeof(HashSet<>).MakeGenericType(tree) || _worker.FieldType != typeof(Thread) ||
+                _source.FieldType != typeof(CancellationTokenSource) || _token.FieldType != typeof(CancellationToken))
                 throw new MissingFieldException("Texture-worker ownership/cancellation ABI mismatch");
             Clear = AccessTools.DeclaredMethod(renderer, "ClearTree", Type.EmptyTypes);
             if (Clear?.ReturnType != typeof(void) || Clear.IsStatic || Clear.GetMethodBody() == null)
@@ -59,17 +59,17 @@ namespace FuckThisLoadingScreen
         }
         internal void Before(object renderer)
         {
-            if (!enabled() || Environment.CurrentManagedThreadId != mainThread) return;
-            var thread = worker.GetValue(null) as Thread;
+            if (!_enabled() || Environment.CurrentManagedThreadId != _mainThread) return;
+            var thread = _worker.GetValue(null) as Thread;
             if (thread == null || !thread.IsAlive || ReferenceEquals(thread, Thread.CurrentThread)) return;
-            var owned = ownedTrees.GetValue(renderer) as IDictionary;
-            object registered = trees.GetValue(null);
+            var owned = _ownedTrees.GetValue(renderer) as IDictionary;
+            object registered = _trees.GetValue(null);
             // In this EFT ABI only main-thread construction/disposal changes the set; the
             // worker only enumerates it. Do not take the very lock that is being starved.
             if (owned == null || !OwnsAll(owned.Values, registered as IEnumerable))
             { Note("skipped-shared-or-empty-tree-set"); return; }
-            var cancellation = source.GetValue(null) as CancellationTokenSource;
-            if (cancellation == null || !((CancellationToken)token.GetValue(null)).Equals(cancellation.Token) || !ReferenceEquals(worker.GetValue(null), thread))
+            var cancellation = _source.GetValue(null) as CancellationTokenSource;
+            if (cancellation == null || !((CancellationToken)_token.GetValue(null)).Equals(cancellation.Token) || !ReferenceEquals(_worker.GetValue(null), thread))
             { Note("skipped-worker-generation-mismatch"); return; }
             var span = BeginTrace();
             string result = "failed";
@@ -86,7 +86,7 @@ namespace FuckThisLoadingScreen
         { try { return HideoutResearch.Active?.BeginDetail("decals.texture-worker.quiesce", "Cancel and join before native texture-tree disposal; wait limit=2000ms"); } catch { return null; } }
         private static void Note(string result)
         { try { HideoutResearch.Active?.NoteDetail("decals.texture-worker.quiesce", result); } catch { } }
-        private void Warn(string text) { if (!warned) { warned = true; try { warning(text); } catch { } } }
+        private void Warn(string text) { if (!_warned) { _warned = true; try { _warning(text); } catch { } } }
 
         internal static string StopWorker(Thread thread, CancellationTokenSource cancellation, int timeoutMs)
         {

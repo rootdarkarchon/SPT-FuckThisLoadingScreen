@@ -24,43 +24,43 @@ namespace FuckThisLoadingScreen
         internal static volatile HideoutResearch Active;
         internal readonly HideoutDecalState Decals;
         internal readonly DecalMipProbe DecalMips;
-        private readonly Dictionary<MethodBase, HideoutResearchHook> hooks;
-        private readonly List<SceneWatch> scenes = new List<SceneWatch>();
-        private readonly string output, metadata;
-        private readonly Action<string> log;
-        private readonly FieldInfo cameraInstance, cameraController, itemRequests, itemBudget, playerRequests, playerBudget, playerTextures;
-        private readonly FieldInfo inRaid;
-        internal bool InRaid => (bool)inRaid.GetValue(null);
+        private readonly Dictionary<MethodBase, HideoutResearchHook> _hooks;
+        private readonly List<SceneWatch> _scenes = new List<SceneWatch>();
+        private readonly string _output, _metadata;
+        private readonly Action<string> _log, _warning;
+        private readonly FieldInfo _cameraInstance, _cameraController, _itemRequests, _itemBudget, _playerRequests, _playerBudget, _playerTextures;
+        private readonly FieldInfo _inRaid;
+        internal bool InRaid => (bool)_inRaid.GetValue(null);
         internal float? CameraBias
         {
             get
             {
-                object camera = cameraInstance.GetValue(null);
-                var streaming = camera == null ? null : cameraController.GetValue(camera) as StreamingController;
+                object camera = _cameraInstance.GetValue(null);
+                var streaming = camera == null ? null : _cameraController.GetValue(camera) as StreamingController;
                 return streaming == null ? (float?)null : streaming.streamingMipmapBias;
             }
         }
-        private readonly int mainThread = Environment.CurrentManagedThreadId;
-        private volatile HideoutResearchCapture capture;
-        private double lastPump, nextSample, maxGap;
-        private int captures;
-        private bool sampleFailed;
+        private readonly int _mainThread = Environment.CurrentManagedThreadId;
+        private volatile HideoutResearchCapture _capture;
+        private double _lastPump, _nextSample, _maxGap;
+        private int _captures;
+        private bool _sampleFailed;
         private sealed class SceneWatch { internal AsyncOperation Operation; internal HideoutResearchSpan Span; internal float Progress = -1; }
 
         internal const string SampleHeader = "elapsed_ms,unity_frame,window_max_main_gap_ms,mip_enabled,budget_mb,discard_unused,max_reduction,add_all_cameras,max_file_io,async_upload_ms,async_buffer_mb,current_texture_bytes,desired_texture_bytes,target_texture_bytes,total_texture_bytes,nonstreaming_texture_bytes,pending_loads,loading_textures,upload_count,streaming_textures,managed_bytes,target_fps,vsync,background_priority,camera_mip_bias,item_icon_requests,item_icon_budget_mb,player_icon_requests,player_icon_budget_mb,player_icon_tracked_textures,streaming_manager,icon_mip_owned_textures,icon_policy_owners,icon_renders_completed,icon_renders_failed,icon_textures_released," + MipBudgetAccounting.Header;
 
-        internal HideoutResearch(string output, string options, Func<string, Type> find, Action<string> log, List<HideoutResearchHook> specs)
+        internal HideoutResearch(string output, string options, Func<string, Type> find, Action<string> log, List<HideoutResearchHook> specs, Action<string> warning = null)
         {
-            this.output = output; this.log = log; hooks = specs.ToDictionary(s => (MethodBase)s.Method);
-            Decals = HideoutDecalProbes.Bind(find, () => capture);
+            this._output = output; this._log = log; this._warning = warning ?? log; _hooks = specs.ToDictionary(s => (MethodBase)s.Method);
+            Decals = HideoutDecalProbes.Bind(find, () => _capture);
             DecalMips = new DecalMipProbe(find, DecalCapture, () => InRaid);
             Type camera = find("EFT.CameraControl.CameraManager"), item = find("ItemIconCreator"), player = find("IconCreatorGraphicsSettings");
-            cameraInstance = Field(camera, "instance"); cameraController = Field(camera, "_streamingController");
-            inRaid = Field(find("EFT.InGameStatus"), "InRaid");
-            if (inRaid.FieldType != typeof(bool) || !inRaid.IsStatic) throw new MissingFieldException("InGameStatus.InRaid ABI");
-            itemRequests = Field(item, "requests"); itemBudget = Field(item, "mipBudget");
-            playerRequests = Field(player, "_requests"); playerBudget = Field(player, "_mipBudget"); playerTextures = Field(player, "_textures2d");
-            metadata = "FTLS hideout research schema 6\nUTC armed: " + DateTime.UtcNow.ToString("O") +
+            _cameraInstance = Field(camera, "instance"); _cameraController = Field(camera, "_streamingController");
+            _inRaid = Field(find("EFT.InGameStatus"), "InRaid");
+            if (_inRaid.FieldType != typeof(bool) || !_inRaid.IsStatic) throw new MissingFieldException("InGameStatus.InRaid ABI");
+            _itemRequests = Field(item, "requests"); _itemBudget = Field(item, "mipBudget");
+            _playerRequests = Field(player, "_requests"); _playerBudget = Field(player, "_mipBudget"); _playerTextures = Field(player, "_textures2d");
+            _metadata = "FTLS hideout research schema 6\nUTC armed: " + DateTime.UtcNow.ToString("O") +
                 "\nFTLS: " + typeof(HideoutResearch).Assembly.GetName().Version + " | module MVID: " + typeof(HideoutResearch).Module.ModuleVersionId +
                 "\nUnity: " + Application.unityVersion + "\nEFT MVID: " + find("EFT.TarkovApplication").Module.ModuleVersionId +
                 "\nFTLS options: " + options + "\n" +
@@ -160,10 +160,10 @@ namespace FuckThisLoadingScreen
 
         private HideoutResearchSpan Begin(MethodBase method, object instance, object[] args)
         {
-            if (!hooks.TryGetValue(method, out var hook) || (hook.HideoutGameOnly && instance?.GetType().FullName != "EFT.HideoutGame")) return null;
-            if (capture?.Closed == true) Retire();
+            if (!_hooks.TryGetValue(method, out var hook) || (hook.HideoutGameOnly && instance?.GetType().FullName != "EFT.HideoutGame")) return null;
+            if (_capture?.Closed == true) Retire();
             if (hook.Start) EnsureCapture(hook.Stage);
-            if (capture == null) return null;
+            if (_capture == null) return null;
             string detail = hook.Stage.StartsWith("scene.") && args.Length > 0 && args[0] is string name ? name : "";
             int resources = Array.FindIndex(method.GetParameters(), p => p.Name == "resources");
             if (resources >= 0 && args[resources] is ICollection collection) detail = "resources=" + collection.Count;
@@ -172,61 +172,61 @@ namespace FuckThisLoadingScreen
                     if (args[i] is Enum) detail = "customization_type=" + args[i];
             if (hook.Stage == "decals.texture-tree.dispose" && instance != null)
                 detail = "tree_hash=" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(instance);
-            var span = capture.Begin(hook.Stage, hook.Entry, detail);
-            if (Environment.CurrentManagedThreadId == mainThread && nextSample == 0) Pump();
+            var span = _capture.Begin(hook.Stage, hook.Entry, detail);
+            if (Environment.CurrentManagedThreadId == _mainThread && _nextSample == 0) Pump();
             return span;
         }
         private void EnsureCapture(string trigger)
         {
-            if (capture?.Closed == true) Retire();
-            if (capture == null && captures < 6 && Environment.CurrentManagedThreadId == mainThread)
+            if (_capture?.Closed == true) Retire();
+            if (_capture == null && _captures < 6 && Environment.CurrentManagedThreadId == _mainThread)
             {
-                string directory = Path.Combine(output, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + "-" + Guid.NewGuid().ToString("N").Substring(0, 8));
-                capture = new HideoutResearchCapture(directory, metadata, SampleHeader, workerSnapshot: Decals.Snapshot); captures++;
-                lastPump = HideoutResearchCapture.Now; nextSample = 0; maxGap = 0; sampleFailed = false;
-                capture.Note("capture-trigger", trigger);
-                log("Hideout research recording: " + directory);
+                string directory = Path.Combine(_output, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + "-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+                _capture = new HideoutResearchCapture(directory, _metadata, SampleHeader, workerSnapshot: Decals.Snapshot); _captures++;
+                _lastPump = HideoutResearchCapture.Now; _nextSample = 0; _maxGap = 0; _sampleFailed = false;
+                _capture.Note("capture-trigger", trigger);
+                _log("Hideout research recording: " + directory);
             }
         }
         internal HideoutResearchCapture IconCapture()
         {
-            if (Environment.CurrentManagedThreadId != mainThread) return null;
-            EnsureCapture("icons.mip-probe"); return capture;
+            if (Environment.CurrentManagedThreadId != _mainThread) return null;
+            EnsureCapture("icons.mip-probe"); return _capture;
         }
         internal HideoutResearchCapture DecalCapture()
         {
-            if (Environment.CurrentManagedThreadId != mainThread) return null;
-            EnsureCapture("decals.mip-probe"); return capture;
+            if (Environment.CurrentManagedThreadId != _mainThread) return null;
+            EnsureCapture("decals.mip-probe"); return _capture;
         }
 
         internal void Pump()
         {
-            if (capture == null) return;
-            if (capture.Closed) { Retire(); return; }
+            if (_capture == null) return;
+            if (_capture.Closed) { Retire(); return; }
             double now = HideoutResearchCapture.Now;
-            maxGap = Math.Max(maxGap, now - lastPump); lastPump = now; capture.Pulse();
-            if (now < nextSample) return;
-            nextSample = now + 500;
-            try { if (!sampleFailed) capture.Sample(Snapshot(maxGap)); }
-            catch (Exception error) { sampleFailed = true; capture.Note("sample-error", error.GetType().Name + ": " + error.Message); }
-            maxGap = 0;
-            for (int i = scenes.Count - 1; i >= 0; i--)
+            _maxGap = Math.Max(_maxGap, now - _lastPump); _lastPump = now; _capture.Pulse();
+            if (now < _nextSample) return;
+            _nextSample = now + 500;
+            try { if (!_sampleFailed) _capture.Sample(Snapshot(_maxGap)); }
+            catch (Exception error) { _sampleFailed = true; _capture.Note("sample-error", error.GetType().Name + ": " + error.Message); }
+            _maxGap = 0;
+            for (int i = _scenes.Count - 1; i >= 0; i--)
             {
-                var watch = scenes[i];
-                if (watch.Span.Owner.Closed) { scenes.RemoveAt(i); continue; }
+                var watch = _scenes[i];
+                if (watch.Span.Owner.Closed) { _scenes.RemoveAt(i); continue; }
                 float progress = watch.Operation.progress;
                 if (progress != watch.Progress || watch.Operation.isDone)
                 {
                     watch.Progress = progress;
                     watch.Span.Owner.Note("scene-progress", "span=" + watch.Span.Id + " progress=" + HideoutResearchCapture.Number(progress) + " done=" + watch.Operation.isDone + " allow_activation=" + watch.Operation.allowSceneActivation);
                 }
-                if (watch.Operation.isDone) { watch.Span.Finish("completed"); scenes.RemoveAt(i); }
+                if (watch.Operation.isDone) { watch.Span.Finish("completed"); _scenes.RemoveAt(i); }
             }
         }
         private string Snapshot(double gap)
         {
-            object camera = cameraInstance.GetValue(null);
-            var streaming = camera == null ? null : cameraController.GetValue(camera) as StreamingController;
+            object camera = _cameraInstance.GetValue(null);
+            var streaming = camera == null ? null : _cameraController.GetValue(camera) as StreamingController;
             return string.Join(",", new[] {
                 Time.frameCount.ToString(), HideoutResearchCapture.Number(gap), B(QualitySettings.streamingMipmapsActive), N(QualitySettings.streamingMipmapsMemoryBudget),
                 B(Texture.streamingTextureDiscardUnusedMips), N(QualitySettings.streamingMipmapsMaxLevelReduction), B(QualitySettings.streamingMipmapsAddAllCameras),
@@ -234,8 +234,8 @@ namespace FuckThisLoadingScreen
                 N(Texture.currentTextureMemory), N(Texture.desiredTextureMemory), N(Texture.targetTextureMemory), N(Texture.totalTextureMemory), N(Texture.nonStreamingTextureMemory),
                 N(Texture.streamingTexturePendingLoadCount), N(Texture.streamingTextureLoadingCount), N(Texture.streamingMipmapUploadCount), N(Texture.streamingTextureCount),
                 N(GC.GetTotalMemory(false)), N(Application.targetFrameRate), N(QualitySettings.vSyncCount), N((int)Application.backgroundLoadingPriority),
-                streaming == null ? "" : N(streaming.streamingMipmapBias), N(itemRequests.GetValue(null)), N(itemBudget.GetValue(null)), N(playerRequests.GetValue(null)), N(playerBudget.GetValue(null)),
-                N((playerTextures.GetValue(null) as ICollection)?.Count ?? -1), HideoutResearchCapture.Quote(StreamingManager(PlayerLoop.GetCurrentPlayerLoop())),
+                streaming == null ? "" : N(streaming.streamingMipmapBias), N(_itemRequests.GetValue(null)), N(_itemBudget.GetValue(null)), N(_playerRequests.GetValue(null)), N(_playerBudget.GetValue(null)),
+                N((_playerTextures.GetValue(null) as ICollection)?.Count ?? -1), HideoutResearchCapture.Quote(StreamingManager(PlayerLoop.GetCurrentPlayerLoop())),
                 N(IconMipLifetime.ActiveTextures), N(IconMipLifetime.ActiveBudgets), N(IconMipLifetime.Completed), N(IconMipLifetime.Failed), N(IconMipLifetime.ReleasedTextures) }) + "," + MipBudgetAccounting.Snapshot();
         }
         private static string B(bool value) => value ? "true" : "false";
@@ -252,18 +252,18 @@ namespace FuckThisLoadingScreen
         {
             if (message == null) return;
             if (message.IndexOf("Mip 0 waiting timeout", StringComparison.OrdinalIgnoreCase) >= 0 || message.IndexOf("texture streaming", StringComparison.OrdinalIgnoreCase) >= 0)
-                capture?.StreamingLog(message);
+                _capture?.StreamingLog(message);
         }
-        internal HideoutResearchSpan BeginDetail(string stage, string detail) => capture?.Begin(stage, detail: detail);
-        internal void NoteDetail(string stage, string detail) => capture?.Note(stage, detail);
+        internal HideoutResearchSpan BeginDetail(string stage, string detail) => _capture?.Begin(stage, detail: detail);
+        internal void NoteDetail(string stage, string detail) => _capture?.Note(stage, detail);
         private void Retire()
         {
-            var old = capture; capture = null; scenes.Clear();
-            log("Hideout research capture closed: " + old.DirectoryPath + (old.Error == null ? "" : " | writer failed: " + old.Error));
+            var old = _capture; _capture = null; _scenes.Clear();
+            (old.Error == null ? _log : _warning)("Hideout research capture closed: " + old.DirectoryPath + (old.Error == null ? "" : " | writer failed: " + old.Error));
         }
         internal void Stop()
         {
-            var old = capture; capture = null; scenes.Clear();
+            var old = _capture; _capture = null; _scenes.Clear();
             old?.Close("plugin-stopped"); old?.Join(250);
         }
         internal static void Prefix(MethodBase __originalMethod, object __instance, object[] __args, out HideoutResearchSpan __state)
@@ -279,7 +279,7 @@ namespace FuckThisLoadingScreen
             {
                 __state.Owner.LaunchReturned(__state);
                 if (__result == null) __state.Finish("null-operation");
-                else if (Active != null && Active.scenes.Count < 32) Active.scenes.Add(new SceneWatch { Operation = __result, Span = __state });
+                else if (Active != null && Active._scenes.Count < 32) Active._scenes.Add(new SceneWatch { Operation = __result, Span = __state });
                 else __state.Finish("scene-watch-cap");
             }
             catch { __state.Finish("observer-failed"); }

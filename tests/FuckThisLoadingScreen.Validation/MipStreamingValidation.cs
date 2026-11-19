@@ -13,9 +13,9 @@ using UnityEngine;
 
 internal static class MipStreamingValidation
 {
-    private static int itemRequests, playerRequests;
-    private static float itemSentinel, playerSentinel;
-    private static float baseBudget = 1000;
+    private static int _itemRequests, _playerRequests;
+    private static float _itemSentinel, _playerSentinel;
+    private static float _baseBudget = 1000;
     private sealed class CameraFixture { public StreamingController _streamingController; }
     private sealed class ContainerFixture
     {
@@ -37,12 +37,12 @@ internal static class MipStreamingValidation
         public float pixelsHBuf, pixelsVBuf, closestDist;
     }
     private static void SetPrivate(string name, object value) => AccessTools.Field(typeof(IconMipLifetime), name).SetValue(null, value);
-    private static readonly Dictionary<int, ThreadResults> results = new Dictionary<int, ThreadResults>();
-    private static ManualResetEventSlim readerEntered, readerRelease;
+    private static readonly Dictionary<int, ThreadResults> Results = new Dictionary<int, ThreadResults>();
+    private static ManualResetEventSlim _readerEntered, _readerRelease;
     [MethodImpl(MethodImplOptions.NoInlining)] private static void Reader(bool fail)
     {
-        readerEntered.Set(); readerRelease.Wait(5000);
-        foreach (var value in results) { if (fail) throw new InvalidOperationException("reader"); }
+        _readerEntered.Set(); _readerRelease.Wait(5000);
+        foreach (var value in Results) { if (fail) throw new InvalidOperationException("reader"); }
     }
     [MethodImpl(MethodImplOptions.NoInlining)] private static async Task<int> Render(Func<Task<int>> render) => await render();
     [MethodImpl(MethodImplOptions.NoInlining)] private static Task<int> ThrowLaunch() => throw new InvalidOperationException("launch");
@@ -59,14 +59,14 @@ internal static class MipStreamingValidation
         GameObject cameraObject = null;
         try
         {
-            SetPrivate("itemCount", AccessTools.Field(typeof(MipStreamingValidation), nameof(itemRequests)));
-            SetPrivate("playerCount", AccessTools.Field(typeof(MipStreamingValidation), nameof(playerRequests)));
-            SetPrivate("itemBudget", AccessTools.Field(typeof(MipStreamingValidation), nameof(itemSentinel)));
-            SetPrivate("playerBudget", AccessTools.Field(typeof(MipStreamingValidation), nameof(playerSentinel)));
+            SetPrivate("itemCount", AccessTools.Field(typeof(MipStreamingValidation), nameof(_itemRequests)));
+            SetPrivate("playerCount", AccessTools.Field(typeof(MipStreamingValidation), nameof(_playerRequests)));
+            SetPrivate("itemBudget", AccessTools.Field(typeof(MipStreamingValidation), nameof(_itemSentinel)));
+            SetPrivate("playerBudget", AccessTools.Field(typeof(MipStreamingValidation), nameof(_playerSentinel)));
             SetPrivate("playerBusy", AccessTools.Field(typeof(ContainerFixture), nameof(ContainerFixture.Busy)));
             SetPrivate("playerComplete", AccessTools.DeclaredMethod(typeof(ContainerFixture), nameof(ContainerFixture.Complete)));
             SetPrivate("controller", AccessTools.Field(typeof(CameraFixture), "_streamingController"));
-            SetPrivate("nativeIncrease", (Func<float>)(() => { QualitySettings.streamingMipmapsMemoryBudget = baseBudget + 100; QualitySettings.streamingMipmapsMaxLevelReduction = 4; return baseBudget; }));
+            SetPrivate("nativeIncrease", (Func<float>)(() => { QualitySettings.streamingMipmapsMemoryBudget = _baseBudget + 100; QualitySettings.streamingMipmapsMaxLevelReduction = 4; return _baseBudget; }));
             SetPrivate("nativeRestore", (Action)(() => { QualitySettings.streamingMipmapsMemoryBudget = 1000; QualitySettings.streamingMipmapsMaxLevelReduction = 2; }));
             QualitySettings.streamingMipmapsMemoryBudget = 1000; QualitySettings.streamingMipmapsMaxLevelReduction = 2;
             QualitySettings.streamingMipmapsActive = true;
@@ -90,35 +90,35 @@ internal static class MipStreamingValidation
             Task<int> Item(Task<int> pending) => Render(async () =>
             {
                 check(IconMipLifetime.Current.Value != null, "Native render kickoff receives an isolated ambient lease");
-                Interlocked.Increment(ref itemRequests); IconMipLifetime.Current.Value.ItemRender = true; IconMipLifetime.Current.Value.ItemCount = true;
+                Interlocked.Increment(ref _itemRequests); IconMipLifetime.Current.Value.ItemRender = true; IconMipLifetime.Current.Value.ItemCount = true;
                 IconMipLifetime.Increase(); IconMipLifetime.Bias(camera, 2);
                 IconMipLifetime.SetRequested(texture, 0); IconMipLifetime.SetMinimum(texture, 0);
                 await Task.Yield();
                 check(IconMipLifetime.Current.Value != null, "Lease follows native Unity/Mono awaits after caller scope restoration");
                 int value = await pending;
-                Interlocked.Decrement(ref itemRequests); IconMipLifetime.Current.Value.ItemCount = false; IconMipLifetime.Restore(); IconMipLifetime.Bias(camera, -2);
+                Interlocked.Decrement(ref _itemRequests); IconMipLifetime.Current.Value.ItemCount = false; IconMipLifetime.Restore(); IconMipLifetime.Bias(camera, -2);
                 return value;
             });
             Task<int> a = Item(first.Task), b = Render(async () =>
             {
-                Interlocked.Increment(ref playerRequests); IconMipLifetime.Current.Value.PlayerCount = true; IconMipLifetime.Increase(); IconMipLifetime.Bias(camera, 2);
+                Interlocked.Increment(ref _playerRequests); IconMipLifetime.Current.Value.PlayerCount = true; IconMipLifetime.Increase(); IconMipLifetime.Bias(camera, 2);
                 IconMipLifetime.SetRequested(texture, 0); IconMipLifetime.SetMinimum(texture, 0);
                 int value = await second.Task;
                 IconMipLifetime.ClearRequested(texture); IconMipLifetime.ClearMinimum(texture);
-                Interlocked.Decrement(ref playerRequests); IconMipLifetime.Current.Value.PlayerCount = false; IconMipLifetime.Restore(); IconMipLifetime.Bias(camera, -2);
+                Interlocked.Decrement(ref _playerRequests); IconMipLifetime.Current.Value.PlayerCount = false; IconMipLifetime.Restore(); IconMipLifetime.Bias(camera, -2);
                 return value;
             });
             check(IconMipLifetime.Current.Value == null, "Async kickoff restores the caller's ambient scope");
-            check(itemRequests == 1 && playerRequests == 1 && IconMipLifetime.ActiveBudgets == 2 && IconMipLifetime.ActiveTextures == 1,
+            check(_itemRequests == 1 && _playerRequests == 1 && IconMipLifetime.ActiveBudgets == 2 && IconMipLifetime.ActiveTextures == 1,
                 "Item/player renders share one texture while retaining separate render ownership");
             check(QualitySettings.streamingMipmapsMemoryBudget == 1100 && camera._streamingController.streamingMipmapBias == 0.5f,
                 "Overlapping creator types apply one budget boost and one camera adjustment");
             second.SetResult(22); context.Until(b);
             check(b.Result == 22 && texture.requestedMipmapLevel == 0 && texture.minimumMipmapLevel == 0 && IconMipLifetime.ActiveBudgets == 1,
-                "Player cleanup cannot clear an overlapping item's texture request or memory policy: result=" + b.Result + " requested=" + texture.requestedMipmapLevel + " minimum=" + texture.minimumMipmapLevel + " owners=" + IconMipLifetime.ActiveBudgets + " textures=" + IconMipLifetime.ActiveTextures + " itemCount=" + itemRequests);
+                "Player cleanup cannot clear an overlapping item's texture request or memory policy: result=" + b.Result + " requested=" + texture.requestedMipmapLevel + " minimum=" + texture.minimumMipmapLevel + " owners=" + IconMipLifetime.ActiveBudgets + " textures=" + IconMipLifetime.ActiveTextures + " itemCount=" + _itemRequests);
             check(camera._streamingController.streamingMipmapBias == 0.5f, "First render completion retains camera adjustment for the remaining owner");
             first.SetResult(11); context.Until(a);
-            check(a.Result == 11 && itemRequests == 0 && playerRequests == 0 && IconMipLifetime.ActiveTextures == 0 && IconMipLifetime.ActiveBudgets == 0,
+            check(a.Result == 11 && _itemRequests == 0 && _playerRequests == 0 && IconMipLifetime.ActiveTextures == 0 && IconMipLifetime.ActiveBudgets == 0,
                 "Last successful render releases all counters and texture/budget ownership");
             check(texture.requestedMipmapLevel == clearedRequested && texture.minimumMipmapLevel == clearedMinimum && QualitySettings.streamingMipmapsMemoryBudget == 1000 &&
                 QualitySettings.streamingMipmapsMaxLevelReduction == 2 && camera._streamingController.streamingMipmapBias == -1.5f,
@@ -133,7 +133,7 @@ internal static class MipStreamingValidation
                 try { task.GetAwaiter().GetResult(); check(false, "Failure must propagate"); }
                 catch (OperationCanceledException) { check(cancel, "Native cancellation remains cancellation"); }
                 catch (InvalidOperationException e) { check(!cancel && e.Message == "render failed", "Original rendering failure reaches the caller"); }
-                check(itemRequests == 0 && IconMipLifetime.ActiveTextures == 0 && IconMipLifetime.ActiveBudgets == 0 &&
+                check(_itemRequests == 0 && IconMipLifetime.ActiveTextures == 0 && IconMipLifetime.ActiveBudgets == 0 &&
                     texture.requestedMipmapLevel == clearedRequested && texture.minimumMipmapLevel == clearedMinimum && camera._streamingController.streamingMipmapBias == -1.5f,
                     "Failure/cancellation balances counters and restores texture/policy/camera state");
             }
@@ -155,7 +155,7 @@ internal static class MipStreamingValidation
                 "Cleanup preserves newer external texture, budget, reduction and bias writes");
             check(IconMipLifetime.Completed >= 6 && IconMipLifetime.Failed >= 3 && IconMipLifetime.ActiveTextures == 0, "Research counters expose completed and failed cleanup with no retained textures");
             var refresh = new TaskCompletionSource<int>(); Task<int> refreshTask = Item(refresh.Task);
-            baseBudget = 1600; QualitySettings.streamingMipmapsMemoryBudget = 1600; QualitySettings.streamingMipmapsMaxLevelReduction = 3;
+            _baseBudget = 1600; QualitySettings.streamingMipmapsMemoryBudget = 1600; QualitySettings.streamingMipmapsMaxLevelReduction = 3;
             IconMipLifetime.PolicyRefreshed();
             check(QualitySettings.streamingMipmapsMemoryBudget == 1700 && QualitySettings.streamingMipmapsMaxLevelReduction == 4, "Graphics refresh reapplies one icon boost over the newly selected policy");
             bool drained = false; IconMipLifetime.WhenDrained(() => drained = true);
@@ -163,23 +163,23 @@ internal static class MipStreamingValidation
             refresh.SetResult(55); context.Until(refreshTask);
             check(drained && IconMipLifetime.ActiveScopes == 0 && QualitySettings.streamingMipmapsMemoryBudget == 1600 && QualitySettings.streamingMipmapsMaxLevelReduction == 3,
                 "Last render restores newly selected settings and permits deferred unpatching");
-            baseBudget = 1000;
+            _baseBudget = 1000;
             var container = new ContainerFixture();
             IconMipLifetime.Begin(out var failedPlayer); failedPlayer.PlayerRender = true; failedPlayer.Creator = container;
-            failedPlayer.PlayerCount = true; playerRequests++; playerSentinel = 1; IconMipLifetime.Increase();
+            failedPlayer.PlayerCount = true; _playerRequests++; _playerSentinel = 1; IconMipLifetime.Increase();
             IconMipLifetime.TrackContainer(Task.CompletedTask, failedPlayer).GetAwaiter().GetResult();
             IconMipLifetime.Begin(out var queuedPlayer); queuedPlayer.PlayerRender = true; queuedPlayer.Creator = container;
-            queuedPlayer.PlayerCount = true; playerRequests++; IconMipLifetime.Increase();
+            queuedPlayer.PlayerCount = true; _playerRequests++; IconMipLifetime.Increase();
             Task queued = IconMipLifetime.TrackContainer(container.Wait(), queuedPlayer);
             IconMipLifetime.Current.Value = null;
             IconMipLifetime.Release(failedPlayer, true);
-            check(!container.Busy && container.Calls == 1 && playerRequests == 1 && IconMipLifetime.ActiveBudgets == 1,
+            check(!container.Busy && container.Calls == 1 && _playerRequests == 1 && IconMipLifetime.ActiveBudgets == 1,
                 "Failed body disposal releases only the failed owner's queue slot/count/policy and preserves queued ownership");
             context.Until(queued);
             check(queuedPlayer.OwnsPlayerContainer && container.Busy, "Queued native wait can acquire the container after failed-owner cleanup");
             container.FailDispose = false; IconMipLifetime.Current.Value = queuedPlayer; container.Complete();
             IconMipLifetime.Current.Value = null; IconMipLifetime.Release(queuedPlayer, false);
-            check(playerRequests == 0 && playerSentinel == 0 && IconMipLifetime.ActiveBudgets == 0 && IconMipLifetime.ActiveScopes == 0,
+            check(_playerRequests == 0 && _playerSentinel == 0 && IconMipLifetime.ActiveBudgets == 0 && IconMipLifetime.ActiveScopes == 0,
                 "Final queued render restores all counts and policy after the preceding render failed");
             texture.ClearRequestedMipmapLevel(); texture.ClearMinimumMipmapLevel();
         }
@@ -205,24 +205,24 @@ internal static class MipStreamingValidation
     private static void TestResults(Action<bool, string> check)
     {
         var harmony = new Harmony("ftls.decal.results.fixture");
-        readerEntered = new ManualResetEventSlim(); readerRelease = new ManualResetEventSlim();
+        _readerEntered = new ManualResetEventSlim(); _readerRelease = new ManualResetEventSlim();
         try
         {
             harmony.Patch(AccessTools.DeclaredMethod(typeof(MipStreamingValidation), nameof(Reader)),
                 prefix: new HarmonyMethod(typeof(DecalResultSynchronization), nameof(DecalResultSynchronization.Enter)),
                 finalizer: new HarmonyMethod(typeof(DecalResultSynchronization), nameof(DecalResultSynchronization.Exit)));
             var value = new ThreadResults();
-            DecalResultSynchronization.Add(results, 1, value);
+            DecalResultSynchronization.Add(Results, 1, value);
             var reader = new Thread(() => Reader(false)) { IsBackground = true }; reader.Start();
-            check(readerEntered.Wait(5000), "Reader entered its protected enumeration");
+            check(_readerEntered.Wait(5000), "Reader entered its protected enumeration");
             using (var done = new ManualResetEventSlim())
             {
-                var writer = new Thread(() => { DecalResultSynchronization.Add(results, 2, new ThreadResults()); DecalResultSynchronization.Mip(value, 3); done.Set(); }) { IsBackground = true };
+                var writer = new Thread(() => { DecalResultSynchronization.Add(Results, 2, new ThreadResults()); DecalResultSynchronization.Mip(value, 3); done.Set(); }) { IsBackground = true };
                 writer.Start();
                 check(!done.Wait(40), "Dictionary insertion and result publication cannot mutate active reader state");
-                readerRelease.Set(); check(reader.Join(5000) && writer.Join(5000), "Reader and writer both finish after short gate handoff");
+                _readerRelease.Set(); check(reader.Join(5000) && writer.Join(5000), "Reader and writer both finish after short gate handoff");
             }
-            check(results.Count == 2 && value.requestedMipMapLevel == 3, "Serialized writer retains native dictionary and mip values");
+            check(Results.Count == 2 && value.requestedMipMapLevel == 3, "Serialized writer retains native dictionary and mip values");
             try { Reader(true); check(false, "Reader should fail"); }
             catch (InvalidOperationException e) { check(e.Message == "reader", "Reader exception propagates unchanged"); }
             bool entered = false;
@@ -231,13 +231,13 @@ internal static class MipStreamingValidation
             var errors = new List<Exception>();
             var stress = new Thread(() =>
             {
-                try { for (int i = 3; i < 2003; i++) { DecalResultSynchronization.Add(results, i, new ThreadResults()); DecalResultSynchronization.Frame(value, i); DecalResultSynchronization.H(value, i); } }
+                try { for (int i = 3; i < 2003; i++) { DecalResultSynchronization.Add(Results, i, new ThreadResults()); DecalResultSynchronization.Frame(value, i); DecalResultSynchronization.H(value, i); } }
                 catch (Exception e) { errors.Add(e); }
             });
             stress.Start(); for (int i = 0; i < 2000; i++) Reader(false);
-            check(stress.Join(5000) && errors.Count == 0 && results.Count == 2002, "Concurrent insertion/enumeration stress completes without dictionary invalidation or lost entries");
+            check(stress.Join(5000) && errors.Count == 0 && Results.Count == 2002, "Concurrent insertion/enumeration stress completes without dictionary invalidation or lost entries");
         }
-        finally { readerRelease.Set(); harmony.UnpatchSelf(); results.Clear(); readerEntered.Dispose(); readerRelease.Dispose(); }
+        finally { _readerRelease.Set(); harmony.UnpatchSelf(); Results.Clear(); _readerEntered.Dispose(); _readerRelease.Dispose(); }
     }
     internal static void Installed(Action<bool, string> check, Func<string, Type> find)
     {
@@ -431,14 +431,14 @@ internal static class MipStreamingValidation
     }
     private sealed class PumpContext : SynchronizationContext
     {
-        private readonly Queue<Action> work = new Queue<Action>();
-        public override void Post(SendOrPostCallback callback, object state) { lock (work) work.Enqueue(() => callback(state)); }
+        private readonly Queue<Action> _work = new Queue<Action>();
+        public override void Post(SendOrPostCallback callback, object state) { lock (_work) _work.Enqueue(() => callback(state)); }
         internal void Until(Task task)
         {
             var until = DateTime.UtcNow.AddSeconds(10);
             while (!task.IsCompleted)
             {
-                Action action = null; lock (work) if (work.Count > 0) action = work.Dequeue();
+                Action action = null; lock (_work) if (_work.Count > 0) action = _work.Dequeue();
                 if (action != null) action(); else Thread.Sleep(1);
                 if (DateTime.UtcNow > until) throw new TimeoutException("Icon Task fixture did not finish");
             }

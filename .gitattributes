@@ -1,3 +1,6 @@
 * text=auto eol=lf
+*.ps1 text eol=crlf
 *.dll binary
 *.zip binary
+*.bundle binary
+*.png binary

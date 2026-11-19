@@ -1,0 +1,25 @@
+<Project>
+  <!-- Single identity source for this repository. Everything below is consumed by the csprojs, the
+       generated PluginInfo.g.cs (Directory.Build.targets) and scripts/Build.ps1. -->
+  <PropertyGroup>
+    <ModName>FuckThisLoadingScreen</ModName>
+    <PluginName>FuckThisLoadingScreen</PluginName>
+    <HasClient>true</HasClient>
+    <HasServer>false</HasServer>
+    <PluginGuid>com.rootdarkarchon.fuckthisloadingscreen</PluginGuid>
+    <Version>1.1.0</Version>
+    <SptLabel>SPT4.1</SptLabel>
+    <Authors>rootdarkarchon</Authors>
+    <Company>$(Authors)</Company>
+    <Product>$(PluginName)</Product>
+    <Copyright>Copyright (c) 2026 $(Authors)</Copyright>
+    <LangVersion>latest</LangVersion>
+    <Deterministic>true</Deterministic>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+  <!-- The SPT install comes from TARKOV_SPT_INSTALL; override only with -p:SptInstallPath=... -->
+  <PropertyGroup>
+    <SptInstallPath Condition="'$(SptInstallPath)' == ''">$(TARKOV_SPT_INSTALL)</SptInstallPath>
+  </PropertyGroup>
+</Project>

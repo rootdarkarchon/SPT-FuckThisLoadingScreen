@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -44,23 +45,27 @@ namespace FuckThisLoadingScreen
         // 64px (7 mips) and 1024px (11 mips) imported streaming textures. It is not
         // derived from a texture's mip count. Streaming-disabled getters report -1.
         internal const int ClearedMinimumMip = 8;
-        private static readonly Dictionary<Texture2D, TextureState> textures = new Dictionary<Texture2D, TextureState>(Identity<Texture2D>.Instance);
-        private static readonly Dictionary<StreamingController, BiasState> cameras = new Dictionary<StreamingController, BiasState>(Identity<StreamingController>.Instance);
-        private static FieldInfo itemCount, playerCount, itemBudget, playerBudget, controller, cameraInstance;
-        private static FieldInfo playerBusy;
+        private static readonly Dictionary<Texture2D, TextureState> Textures = new Dictionary<Texture2D, TextureState>(Identity<Texture2D>.Instance);
+        private static readonly Dictionary<StreamingController, BiasState> Cameras = new Dictionary<StreamingController, BiasState>(Identity<StreamingController>.Instance);
+        [SuppressMessage("Style", "IDE1006", Justification = "Assigned by name through reflection from the validation harness")]
+        private static FieldInfo itemCount, playerCount, itemBudget, playerBudget, controller, playerBusy;
+        private static FieldInfo _cameraInstance;
+        [SuppressMessage("Style", "IDE1006", Justification = "Assigned by name through reflection from the validation harness")]
         private static MethodInfo playerComplete;
+        [SuppressMessage("Style", "IDE1006", Justification = "Assigned by name through reflection from the validation harness")]
         private static Func<float> nativeIncrease;
+        [SuppressMessage("Style", "IDE1006", Justification = "Assigned by name through reflection from the validation harness")]
         private static Action nativeRestore;
-        private static int budgetOwners;
-        private static int activeScopes;
-        private static Action drained;
-        private static float budgetBefore, budgetApplied;
-        private static int reductionBefore;
+        private static int _budgetOwners;
+        private static int _activeScopes;
+        private static Action _drained;
+        private static float _budgetBefore, _budgetApplied;
+        private static int _reductionBefore;
         internal static Action<string> Warning;
         internal static long Completed, ReleasedTextures, Failed;
-        internal static int ActiveTextures => textures.Count;
-        internal static int ActiveBudgets => budgetOwners;
-        internal static int ActiveScopes => activeScopes;
+        internal static int ActiveTextures => Textures.Count;
+        internal static int ActiveBudgets => _budgetOwners;
+        internal static int ActiveScopes => _activeScopes;
 
         internal static void Install(Harmony harmony, Func<string, Type> find, Guid module)
         {
@@ -73,7 +78,7 @@ namespace FuckThisLoadingScreen
             itemBudget = RequireField(item, "mipBudget", typeof(float), true);
             playerBudget = RequireField(graphics, "_mipBudget", typeof(float), true);
             controller = RequireField(camera, "_streamingController", typeof(StreamingController), false);
-            cameraInstance = RequireField(camera, "instance", camera, true);
+            _cameraInstance = RequireField(camera, "instance", camera, true);
             playerBusy = RequireField(player, "_containerIsBusy", typeof(bool), false);
             playerComplete = AccessTools.DeclaredMethod(player, "CompleteRender", Type.EmptyTypes);
             MethodInfo increase = AccessTools.DeclaredMethod(policy, "IncreaseMemoryBudgetForIcon", Type.EmptyTypes);
@@ -127,7 +132,7 @@ namespace FuckThisLoadingScreen
         }
         private static HarmonyMethod Hook(string name) => new HarmonyMethod(typeof(IconMipLifetime), name);
         internal static void Begin(out Scope __state)
-        { __state = new Scope { Previous = Current.Value }; activeScopes++; Current.Value = __state; }
+        { __state = new Scope { Previous = Current.Value }; _activeScopes++; Current.Value = __state; }
         internal static void RenderBegin(MethodBase __originalMethod, object __instance, out Scope __state)
         {
             Begin(out __state);
@@ -178,7 +183,7 @@ namespace FuckThisLoadingScreen
             {
                 int remaining = Math.Max(0, (int)itemCount.GetValue(null) - 1);
                 itemCount.SetValue(null, remaining);
-                if (itemBudget != null) itemBudget.SetValue(null, remaining == 0 ? 0f : Sentinel(budgetBefore));
+                if (itemBudget != null) itemBudget.SetValue(null, remaining == 0 ? 0f : Sentinel(_budgetBefore));
             });
             if (scope.PlayerCount) Safely(() =>
             {
@@ -186,33 +191,33 @@ namespace FuckThisLoadingScreen
                 playerCount.SetValue(null, remaining);
                 if (remaining == 0 && playerBudget != null) playerBudget.SetValue(null, 0f);
             });
-            if (scope.Budget && --budgetOwners == 0) Safely(() =>
+            if (scope.Budget && --_budgetOwners == 0) Safely(() =>
             {
                 if (MipBudgetAccounting.Active != null) MipBudgetAccounting.Active.IconsFinished();
-                else if (QualitySettings.streamingMipmapsMemoryBudget == budgetApplied) QualitySettings.streamingMipmapsMemoryBudget = budgetBefore;
-                if (QualitySettings.streamingMipmapsMaxLevelReduction == 4) QualitySettings.streamingMipmapsMaxLevelReduction = reductionBefore;
+                else if (QualitySettings.streamingMipmapsMemoryBudget == _budgetApplied) QualitySettings.streamingMipmapsMemoryBudget = _budgetBefore;
+                if (QualitySettings.streamingMipmapsMaxLevelReduction == 4) QualitySettings.streamingMipmapsMaxLevelReduction = _reductionBefore;
             });
             Completed++; if (failed) Failed++;
             if (scope.Probe != null) Safely(() => scope.Probe.Finish(failed));
             scope.Probe = null;
             scope.Textures.Clear(); scope.Cameras.Clear(); scope.Model = null; scope.Creator = null; scope.Previous = null;
             scope.Disposing = false;
-            if (--activeScopes == 0 && drained != null)
-            { Action callback = drained; drained = null; Safely(callback); }
+            if (--_activeScopes == 0 && _drained != null)
+            { Action callback = _drained; _drained = null; Safely(callback); }
         }
         internal static void WhenDrained(Action callback)
-        { if (activeScopes == 0) callback(); else drained += callback; }
+        { if (_activeScopes == 0) callback(); else _drained += callback; }
         private static void Safely(Action action)
         { try { action(); } catch (Exception e) { try { Warning?.Invoke("Icon mip cleanup failed: " + e.GetType().Name + ": " + e.Message); } catch { } } }
         private static TextureState Own(Texture2D texture)
         {
             Scope scope = LiveScope;
             if (scope == null || scope.Finished || !texture || !texture.streamingMipmaps) return null;
-            if (!textures.TryGetValue(texture, out TextureState state)) textures.Add(texture, state = new TextureState());
+            if (!Textures.TryGetValue(texture, out TextureState state)) Textures.Add(texture, state = new TextureState());
             if (scope.Textures.Add(texture)) state.Owners++;
             return state;
         }
-        internal static int TextureOwners(Texture2D texture) => textures.TryGetValue(texture, out var state) ? state.Owners : 0;
+        internal static int TextureOwners(Texture2D texture) => Textures.TryGetValue(texture, out var state) ? state.Owners : 0;
         internal static void SetRequested(Texture2D texture, int mip)
         {
             TextureState state = Own(texture);
@@ -226,14 +231,14 @@ namespace FuckThisLoadingScreen
             texture.minimumMipmapLevel = mip;
         }
         internal static void ClearRequested(Texture2D texture)
-        { if (LiveScope == null && !textures.ContainsKey(texture)) texture.ClearRequestedMipmapLevel(); }
+        { if (LiveScope == null && !Textures.ContainsKey(texture)) texture.ClearRequestedMipmapLevel(); }
         internal static void ClearMinimum(Texture2D texture)
-        { if (LiveScope == null && !textures.ContainsKey(texture)) texture.ClearMinimumMipmapLevel(); }
+        { if (LiveScope == null && !Textures.ContainsKey(texture)) texture.ClearMinimumMipmapLevel(); }
         private static void ReleaseTexture(Texture2D texture)
         {
-            TextureState state = textures[texture];
+            TextureState state = Textures[texture];
             if (--state.Owners != 0) return;
-            textures.Remove(texture); ReleasedTextures++;
+            Textures.Remove(texture); ReleasedTextures++;
             if (!texture) return;
             if (state.HasRequested && texture.requestedMipmapLevel == 0)
             { if (state.Requested < 0) texture.ClearRequestedMipmapLevel(); else texture.requestedMipmapLevel = state.Requested; }
@@ -263,7 +268,7 @@ namespace FuckThisLoadingScreen
         private static void OwnPolicyAndCamera()
         {
             Increase();
-            object camera = cameraInstance?.GetValue(null);
+            object camera = _cameraInstance?.GetValue(null);
             if (camera != null) Bias(camera, 2f);
         }
         internal static bool Prepare(ref Task __result)
@@ -271,7 +276,7 @@ namespace FuckThisLoadingScreen
             Scope scope = LiveScope;
             if (scope == null) return true;
             playerCount.SetValue(null, (int)playerCount.GetValue(null) + 1); scope.PlayerCount = true;
-            OwnPolicyAndCamera(); playerBudget.SetValue(null, Sentinel(budgetBefore));
+            OwnPolicyAndCamera(); playerBudget.SetValue(null, Sentinel(_budgetBefore));
             __result = Task.CompletedTask; return false;
         }
         internal static bool RestorePlayer()
@@ -405,15 +410,15 @@ namespace FuckThisLoadingScreen
             if (!scope.Budget)
             {
                 scope.Budget = true;
-                if (budgetOwners++ == 0)
+                if (_budgetOwners++ == 0)
                 {
-                    budgetBefore = QualitySettings.streamingMipmapsMemoryBudget;
-                    reductionBefore = QualitySettings.streamingMipmapsMaxLevelReduction;
+                    _budgetBefore = QualitySettings.streamingMipmapsMemoryBudget;
+                    _reductionBefore = QualitySettings.streamingMipmapsMaxLevelReduction;
                     try { nativeIncrease(); }
-                    finally { MipBudgetAccounting.Active?.NativePolicyWritten(); budgetApplied = QualitySettings.streamingMipmapsMemoryBudget; }
+                    finally { MipBudgetAccounting.Active?.NativePolicyWritten(); _budgetApplied = QualitySettings.streamingMipmapsMemoryBudget; }
                 }
             }
-            return budgetBefore;
+            return _budgetBefore;
         }
         internal static void Restore()
         { if (LiveScope == null) nativeRestore(); }
@@ -426,10 +431,10 @@ namespace FuckThisLoadingScreen
             if (scope == null) { camera.streamingMipmapBias += delta; return before; }
             if (delta > 0 && scope.Cameras.Add(camera))
             {
-                if (!cameras.TryGetValue(camera, out BiasState state))
+                if (!Cameras.TryGetValue(camera, out BiasState state))
                 {
                     state = new BiasState { Owners = 1, Before = before, Applied = before + delta };
-                    cameras.Add(camera, state); camera.streamingMipmapBias = state.Applied;
+                    Cameras.Add(camera, state); camera.streamingMipmapBias = state.Applied;
                 }
                 else state.Owners++;
             }
@@ -437,18 +442,18 @@ namespace FuckThisLoadingScreen
         }
         private static void ReleaseCamera(StreamingController camera)
         {
-            BiasState state = cameras[camera];
+            BiasState state = Cameras[camera];
             if (--state.Owners != 0) return;
-            cameras.Remove(camera);
+            Cameras.Remove(camera);
             if (camera && camera.streamingMipmapBias == state.Applied) camera.streamingMipmapBias = state.Before;
         }
         internal static void PolicyRefreshed()
         {
-            if (budgetOwners == 0) return;
-            budgetBefore = QualitySettings.streamingMipmapsMemoryBudget;
-            reductionBefore = QualitySettings.streamingMipmapsMaxLevelReduction;
+            if (_budgetOwners == 0) return;
+            _budgetBefore = QualitySettings.streamingMipmapsMemoryBudget;
+            _reductionBefore = QualitySettings.streamingMipmapsMaxLevelReduction;
             try { nativeIncrease(); }
-            finally { MipBudgetAccounting.Active?.NativePolicyWritten(); budgetApplied = QualitySettings.streamingMipmapsMemoryBudget; }
+            finally { MipBudgetAccounting.Active?.NativePolicyWritten(); _budgetApplied = QualitySettings.streamingMipmapsMemoryBudget; }
         }
     }
 }

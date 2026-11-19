@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -158,10 +159,12 @@ internal static class TextureWorkerTeardownValidation
     }
     private sealed class TextureQuadTree
     {
+        [SuppressMessage("Style", "IDE1006", Justification = "Mirrors the game's TextureQuadTree field name, which the plugin looks up by name")]
         public static readonly HashSet<TextureQuadTree> _trees = new HashSet<TextureQuadTree>();
         public static Thread _workThreads;
         public static CancellationTokenSource _terminateTokenSource;
         public static CancellationToken _terminateToken;
+        [SuppressMessage("Style", "IDE1006", Justification = "Mirrors the game's TextureQuadTree field name, which the plugin looks up by name")]
         public static readonly object _treesLock = new object();
         internal StaticDeferredDecalRenderer Owner;
         public void Dispose()

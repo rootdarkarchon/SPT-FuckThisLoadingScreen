@@ -14,21 +14,21 @@ using UnityEditor;
 
 public static class FTLSValidation
 {
-    private static int checks, priority, nativeCalls, explicitCollections, iteration;
-    private static long tick;
-    private static Options options;
-    private static readonly List<string> reports = new List<string>();
+    private static int _checks, _priority, _nativeCalls, _explicitCollections, _iteration;
+    private static long _tick;
+    private static Options _options;
+    private static readonly List<string> Reports = new List<string>();
     private static void Check(bool condition, string message)
-    { if (!condition) throw new Exception(message); checks++; }
+    { if (!condition) throw new Exception(message); _checks++; }
     private static Options Enabled() => new Options { Enabled = true, AudioBatching = true, AudioBatchSize = 1200,
         NonCollectingMeasurements = true, Priority = LoadingPriority.High, ParallelScenes = true, ScopedSpawnZones = true, SkipBuiltInSceneProbes = true, LootBundlePriority = true };
     private static LoadingPolicy NewPolicy()
     {
-        options = Enabled(); priority = 4; tick = 0;
+        _options = Enabled(); _priority = 4; _tick = 0;
         int main = Environment.CurrentManagedThreadId;
-        return new LoadingPolicy(() => options, () => priority, value => {
-            Check(Environment.CurrentManagedThreadId == main, "Unity priority write must stay on main thread"); priority = value;
-        }, mode => mode == LoadingPriority.High ? 50 : 10, (text, run) => reports.Add(text), () => tick, 1000);
+        return new LoadingPolicy(() => _options, () => _priority, value => {
+            Check(Environment.CurrentManagedThreadId == main, "Unity priority write must stay on main thread"); _priority = value;
+        }, mode => mode == LoadingPriority.High ? 50 : 10, (text, run) => Reports.Add(text), () => _tick, 1000);
     }
 
     public static void Run()
@@ -36,9 +36,9 @@ public static class FTLSValidation
         string project = Directory.GetParent(UnityEngine.Application.dataPath).FullName;
         try
         {
-            TestPolicy(); TestHooks(); BotProfilePreloadDelayValidation.Run(Check); TestLootPriority(); TestFrameCap(); BoundedSceneValidation.Run(Check); TestSpawnZones(); TestSceneProbes(project); TextureWorkerTeardownValidation.Run(Check); MipStreamingValidation.Run(Check, project); TextureInventoryValidation.Run(Check, project); MipBudgetAccountingValidation.Run(Check); HideoutResearchValidation.Run(Check, project); TestInstalled(Path.Combine(project, "install.txt"));
-            File.WriteAllText(Path.Combine(project, "result.txt"), $"PASS: {checks} loading scope, task/scene scheduling, transpiler and installed-ABI checks. No live loading-speed acceptance claimed.\n");
-            UnityEngine.Debug.Log($"PASS: {checks} FTLS checks");
+            TestPolicy(); TestHooks(); BotProfilePreloadDelayValidation.Run(Check); TestLootPriority(); TestFrameCap(); BoundedSceneValidation.Run(Check); TestSpawnZones(); TestSceneProbes(project); TextureWorkerTeardownValidation.Run(Check); MipStreamingValidation.Run(Check, project); TextureInventoryValidation.Run(Check, project); MipBudgetAccountingValidation.Run(Check); HideoutResearchValidation.Run(Check, project); PluginContractValidation.Run(Check, project); TestInstalled(Path.Combine(project, "install.txt"));
+            File.WriteAllText(Path.Combine(project, "result.txt"), $"PASS: {_checks} loading scope, task/scene scheduling, transpiler and installed-ABI checks. No live loading-speed acceptance claimed.\n");
+            UnityEngine.Debug.Log($"PASS: {_checks} FTLS checks");
             EditorApplication.Exit(0);
         }
         catch (Exception error)
@@ -66,9 +66,9 @@ public static class FTLSValidation
         failTarget = false;
         LoadingPolicy Make(bool enabled = true)
         {
-            options = Enabled(); options.FrameCapOverride = enabled; priority = 4; tick = 0;
-            return new LoadingPolicy(() => options, () => priority, value => priority = value, mode => 50,
-                (text, finished) => reports.Add(text), () => tick, 1000, cap);
+            _options = Enabled(); _options.FrameCapOverride = enabled; _priority = 4; _tick = 0;
+            return new LoadingPolicy(() => _options, () => _priority, value => _priority = value, mode => 50,
+                (text, finished) => Reports.Add(text), () => _tick, 1000, cap);
         }
         foreach (string end in new[] { "normal", "failure", "timeout", "shutdown", "game-started" })
         {
@@ -76,7 +76,7 @@ public static class FTLSValidation
             Check(target == 240 && sync == 0, "Map scope acquires opt-in frame override: " + end);
             if (end == "normal") policy.LeaveMap(map);
             else if (end == "failure") policy.RootFinished(owner, true);
-            else if (end == "timeout") { tick = 600001; policy.Pump(); }
+            else if (end == "timeout") { _tick = 600001; policy.Pump(); }
             else if (end == "shutdown") policy.Stop();
             else { object marker = new object(); policy.AttachMetrics(marker); policy.GameStarted(marker); }
             Check(target == 60 && sync == 1, "Map terminal path restores frame settings: " + end);
@@ -116,45 +116,45 @@ public static class FTLSValidation
             Patch(harmony, nameof(ThrowingLootLaunch), nameof(PolicyHooks.LootLaunchPrefix), nameof(PolicyHooks.LootLaunchPostfix), nameof(PolicyHooks.LootLaunchFinalizer));
             PolicyHooks.Policy = NewPolicy();
             var source = new TaskCompletionSource<int>();
-            Check(ReferenceEquals(LootLaunch(source.Task), source.Task) && priority == 4, "Standalone loot launch retains native priority and Task");
+            Check(ReferenceEquals(LootLaunch(source.Task), source.Task) && _priority == 4, "Standalone loot launch retains native priority and Task");
             LoadingRun run = PolicyHooks.Policy.Begin();
-            Check(ReferenceEquals(LootBundlesTask(source.Task), source.Task) && priority == 4 && run.LootBundleScopes == 0, "Unrelated resource loads outside SpawnLoot retain native priority");
-            Check(ReferenceEquals(LootLaunch(source.Task), source.Task) && priority == 50 && PolicyHooks.LootLaunchDepth == 0, "Loot kickoff extends High through original awaited Task without retaining thread-local launch state");
+            Check(ReferenceEquals(LootBundlesTask(source.Task), source.Task) && _priority == 4 && run.LootBundleScopes == 0, "Unrelated resource loads outside SpawnLoot retain native priority");
+            Check(ReferenceEquals(LootLaunch(source.Task), source.Task) && _priority == 50 && PolicyHooks.LootLaunchDepth == 0, "Loot kickoff extends High through original awaited Task without retaining thread-local launch state");
             Check(run.LootBundleScopes == 1 && run.Maps == 0 && PolicyHooks.Policy.AudioBatchSize == 300 && !PolicyHooks.Policy.ParallelScenes && PolicyHooks.Policy.SceneProbeRun == null,
                 "Loot priority does not expand map-only audio, parallel or scene-probe scopes");
-            tick = 2000; Task.Run(() => source.SetResult(1)).GetAwaiter().GetResult();
-            Check(priority == 50, "Worker completion queues Unity priority restoration"); PolicyHooks.Policy.Pump();
-            Check(priority == 4 && run.LootBundlePriorityScopes == 1 && run.LootBundleScopeTicks == 2000, "Completed loot Task restores priority and reports duration");
+            _tick = 2000; Task.Run(() => source.SetResult(1)).GetAwaiter().GetResult();
+            Check(_priority == 50, "Worker completion queues Unity priority restoration"); PolicyHooks.Policy.Pump();
+            Check(_priority == 4 && run.LootBundlePriorityScopes == 1 && run.LootBundleScopeTicks == 2000, "Completed loot Task restores priority and reports duration");
             Task failed = Task.FromException(new InvalidOperationException("loot failed"));
-            Check(ReferenceEquals(LootLaunch(failed), failed) && priority == 4, "Already-faulted loot Task retains identity and restores priority");
+            Check(ReferenceEquals(LootLaunch(failed), failed) && _priority == 4, "Already-faulted loot Task retains identity and restores priority");
             try { failed.GetAwaiter().GetResult(); throw new Exception("Loot error suppressed"); } catch (InvalidOperationException error) { Check(error.Message == "loot failed", "Original fault remains visible"); }
             Task canceled = Task.FromCanceled(new CancellationToken(true));
-            Check(ReferenceEquals(LootLaunch(canceled), canceled) && priority == 4, "Already-canceled loot Task restores priority");
-            try { ThrowingLootLaunch(); throw new Exception("Launch error suppressed"); } catch (InvalidOperationException) { checks++; }
-            Check(priority == 4 && PolicyHooks.LootLaunchDepth == 0, "Synchronous bundle/launch errors close both scopes");
+            Check(ReferenceEquals(LootLaunch(canceled), canceled) && _priority == 4, "Already-canceled loot Task restores priority");
+            try { ThrowingLootLaunch(); throw new Exception("Launch error suppressed"); } catch (InvalidOperationException) { _checks++; }
+            Check(_priority == 4 && PolicyHooks.LootLaunchDepth == 0, "Synchronous bundle/launch errors close both scopes");
             MapScope map = PolicyHooks.Policy.EnterMap(); BundleScope bundle = PolicyHooks.Policy.EnterLootBundles();
-            PolicyHooks.Policy.LeaveMap(map); Check(priority == 50, "Overlapping loot scope retains priority after map closes");
-            PolicyHooks.Policy.LeaveLootBundles(bundle); Check(priority == 4, "Last priority owner restores original value");
+            PolicyHooks.Policy.LeaveMap(map); Check(_priority == 50, "Overlapping loot scope retains priority after map closes");
+            PolicyHooks.Policy.LeaveLootBundles(bundle); Check(_priority == 4, "Last priority owner restores original value");
             bundle = PolicyHooks.Policy.EnterLootBundles(); map = PolicyHooks.Policy.EnterMap();
-            PolicyHooks.Policy.LeaveLootBundles(bundle); Check(priority == 50, "Overlapping map scope retains priority after loot closes");
-            PolicyHooks.Policy.LeaveMap(map); Check(priority == 4, "Overlap restores only after both owners close");
-            bundle = PolicyHooks.Policy.EnterLootBundles(); priority = 123; PolicyHooks.Policy.LeaveLootBundles(bundle);
-            Check(priority == 123, "Another owner's newer global priority remains intact");
+            PolicyHooks.Policy.LeaveLootBundles(bundle); Check(_priority == 50, "Overlapping map scope retains priority after loot closes");
+            PolicyHooks.Policy.LeaveMap(map); Check(_priority == 4, "Overlap restores only after both owners close");
+            bundle = PolicyHooks.Policy.EnterLootBundles(); _priority = 123; PolicyHooks.Policy.LeaveLootBundles(bundle);
+            Check(_priority == 123, "Another owner's newer global priority remains intact");
             PolicyHooks.Policy.Stop();
-            PolicyHooks.Policy = NewPolicy(); options.LootBundlePriority = false; run = PolicyHooks.Policy.Begin();
-            LootLaunch(Task.CompletedTask); Check(priority == 4 && run.LootBundleScopes == 0, "Independent loot-priority comparison toggle");
+            PolicyHooks.Policy = NewPolicy(); _options.LootBundlePriority = false; run = PolicyHooks.Policy.Begin();
+            LootLaunch(Task.CompletedTask); Check(_priority == 4 && run.LootBundleScopes == 0, "Independent loot-priority comparison toggle");
             PolicyHooks.Policy.Stop();
-            PolicyHooks.Policy = NewPolicy(); options.Priority = LoadingPriority.Native; PolicyHooks.Policy.Begin();
-            LootLaunch(Task.CompletedTask); Check(priority == 4, "Native priority mode applies to loot too"); PolicyHooks.Policy.Stop();
+            PolicyHooks.Policy = NewPolicy(); _options.Priority = LoadingPriority.Native; PolicyHooks.Policy.Begin();
+            LootLaunch(Task.CompletedTask); Check(_priority == 4, "Native priority mode applies to loot too"); PolicyHooks.Policy.Stop();
             foreach (string end in new[] { "failure", "timeout", "shutdown", "game-started" })
             {
                 PolicyHooks.Policy = NewPolicy(); run = PolicyHooks.Policy.Begin(); var pending = new TaskCompletionSource<int>(); LootLaunch(pending.Task);
                 if (end == "failure") PolicyHooks.Policy.RootFinished(run, true);
-                else if (end == "timeout") { tick = 600001; PolicyHooks.Policy.Pump(); }
+                else if (end == "timeout") { _tick = 600001; PolicyHooks.Policy.Pump(); }
                 else if (end == "shutdown") PolicyHooks.Policy.Stop();
                 else { object metrics = new object(); PolicyHooks.Policy.AttachMetrics(metrics); PolicyHooks.Policy.GameStarted(metrics); }
-                Check(priority == 4 && run.Closed, "Terminal cleanup releases pending loot priority: " + end);
-                pending.SetResult(1); PolicyHooks.Policy.Pump(); Check(priority == 4, "Late completion is idempotent: " + end); PolicyHooks.Policy.Stop();
+                Check(_priority == 4 && run.Closed, "Terminal cleanup releases pending loot priority: " + end);
+                pending.SetResult(1); PolicyHooks.Policy.Pump(); Check(_priority == 4, "Late completion is idempotent: " + end); PolicyHooks.Policy.Stop();
             }
         }
         finally { harmony.UnpatchSelf(); PolicyHooks.Policy?.Stop(); PolicyHooks.Policy = null; }
@@ -243,7 +243,7 @@ public static class FTLSValidation
             return go.AddComponent<FTLSValidationZone>();
         }
         var first = MakeZone("duplicate"); var second = MakeZone("duplicate"); var other = MakeZone("other");
-        nativeZones = new[] { first, second, other };
+        _nativeZones = new[] { first, second, other };
         MethodInfo discover = Method(nameof(DiscoverZones)).MakeGenericMethod(typeof(FTLSValidationZone));
         SpawnZoneHooks.NativeFindMethod = discover;
         SpawnZoneHooks.BindNative<FTLSValidationZone>(discover);
@@ -256,71 +256,71 @@ public static class FTLSValidation
                 SH(nameof(SpawnZoneHooks.FixPostfix), Priority.First),
                 finalizer: SH(nameof(SpawnZoneHooks.FixFinalizer), Priority.First));
             harmony.Patch(Method(nameof(MarkerFixture)), transpiler: new HarmonyMethod(typeof(SpawnZoneHooks), nameof(SpawnZoneHooks.MarkerTranspiler)));
-            PolicyHooks.Policy = NewPolicy(); LoadingRun run = PolicyHooks.Policy.Begin(); discoveryCalls = 0;
-            CollectionFixture(() => FixFixture(null, null, nativeZones, () => {
+            PolicyHooks.Policy = NewPolicy(); LoadingRun run = PolicyHooks.Policy.Begin(); _discoveryCalls = 0;
+            CollectionFixture(() => FixFixture(null, null, _nativeZones, () => {
                 for (int i = 0; i < 222; i++) Check(ReferenceEquals(MarkerFixture("duplicate"), first), "Ordered duplicate-name selection preserved");
                 first.name = "renamed";
                 Check(ReferenceEquals(MarkerFixture("renamed"), first), "Renamed zone matched using its live native object");
                 Check(ReferenceEquals(MarkerFixture("duplicate"), second), "Remaining duplicate matched after rename");
                 Check(MarkerFixture("missing") == null, "Missing zone keeps native no-match result");
             }));
-            Check(discoveryCalls == 0 && run.SpawnZoneHits == 225 && run.SpawnZoneScopes == 1, "One reconciliation avoids all repeated global discoveries");
+            Check(_discoveryCalls == 0 && run.SpawnZoneHits == 225 && run.SpawnZoneScopes == 1, "One reconciliation avoids all repeated global discoveries");
             Check(SpawnZoneHooks.Lookup == null && SpawnZoneHooks.Reconciliation == null, "Normal completion releases all zone references");
-            Check(ReferenceEquals(MarkerFixture("renamed"), first) && discoveryCalls == 1, "Standalone marker creation retains native discovery");
-            FixFixture(null, null, nativeZones, () => MarkerFixture("other"));
-            Check(discoveryCalls == 2, "FixSpawns outside native collection call retains standalone behavior");
+            Check(ReferenceEquals(MarkerFixture("renamed"), first) && _discoveryCalls == 1, "Standalone marker creation retains native discovery");
+            FixFixture(null, null, _nativeZones, () => MarkerFixture("other"));
+            Check(_discoveryCalls == 2, "FixSpawns outside native collection call retains standalone behavior");
 
-            var outer = nativeZones; var inner = new[] { other, second, first };
+            var outer = _nativeZones; var inner = new[] { other, second, first };
             CollectionFixture(() => FixFixture(null, null, outer, () => {
                 CollectionFixture(() => FixFixture(null, null, inner, () => Check(ReferenceEquals(SpawnZoneHooks.FindZones<FTLSValidationZone>(), inner), "Nested reconciliation uses its own snapshot")));
                 Check(ReferenceEquals(SpawnZoneHooks.FindZones<FTLSValidationZone>(), outer), "Nested completion restores outer snapshot");
                 Check(Task.Run(() => SpawnZoneHooks.Lookup == null && PolicyHooks.Policy.SpawnZoneRun == null).GetAwaiter().GetResult(), "Scope is thread-local and reuse is main-thread only");
             }));
             var expected = new InvalidOperationException("spawn fixture fault");
-            try { CollectionFixture(() => FixFixture(null, null, nativeZones, () => throw expected)); throw new Exception("Spawn exception suppressed"); }
+            try { CollectionFixture(() => FixFixture(null, null, _nativeZones, () => throw expected)); throw new Exception("Spawn exception suppressed"); }
             catch (InvalidOperationException error) { Check(ReferenceEquals(error, expected), "Native reconciliation exception identity preserved"); }
             Check(SpawnZoneHooks.Lookup == null && SpawnZoneHooks.Reconciliation == null, "Failure releases nested scopes");
 
-            CollectionFixture(() => FixFixture(null, null, nativeZones, () => {
+            CollectionFixture(() => FixFixture(null, null, _nativeZones, () => {
                 first.gameObject.SetActive(false);
                 Check(ReferenceEquals(MarkerFixture("duplicate"), second), "Inactive zone invalidates snapshot and uses native result");
-                int before = discoveryCalls; MarkerFixture("other");
-                Check(discoveryCalls == before + 1, "Invalidated scope stays on native discovery");
+                int before = _discoveryCalls; MarkerFixture("other");
+                Check(_discoveryCalls == before + 1, "Invalidated scope stays on native discovery");
             }));
             first.gameObject.SetActive(true);
             Check(run.SpawnZoneInvalidations == 1, "Snapshot invalidation reported once per scope");
-            CollectionFixture(() => FixFixture(null, null, nativeZones, () => {
+            CollectionFixture(() => FixFixture(null, null, _nativeZones, () => {
                 UnityEngine.Object.DestroyImmediate(first.gameObject);
                 Check(ReferenceEquals(MarkerFixture("duplicate"), second), "Destroyed Unity object triggers native discovery");
             }));
             Check(run.SpawnZoneInvalidations == 2, "Destroyed-zone fallback recorded");
 
-            nativeZones = Array.Empty<FTLSValidationZone>();
-            int calls = discoveryCalls;
-            CollectionFixture(() => FixFixture(null, null, nativeZones, () => Check(MarkerFixture("missing") == null, "Empty snapshot retains empty result")));
-            Check(discoveryCalls == calls, "Empty native scene zone snapshot is reusable");
-            nativeZones = new[] { second, other };
+            _nativeZones = Array.Empty<FTLSValidationZone>();
+            int calls = _discoveryCalls;
+            CollectionFixture(() => FixFixture(null, null, _nativeZones, () => Check(MarkerFixture("missing") == null, "Empty snapshot retains empty result")));
+            Check(_discoveryCalls == calls, "Empty native scene zone snapshot is reusable");
+            _nativeZones = new[] { second, other };
             CollectionFixture(() => FixFixture(null, null, null, () => Check(ReferenceEquals(MarkerFixture("other"), other), "Null snapshot falls back to native lookup")));
 
-            options = Enabled(); options.ScopedSpawnZones = false;
-            CollectionFixture(() => FixFixture(null, null, nativeZones, () => Check(SpawnZoneHooks.Lookup != null, "Option edits do not change an in-flight run")));
-            PolicyHooks.Policy.RootFinished(run, true); run = PolicyHooks.Policy.Begin(); calls = discoveryCalls;
-            CollectionFixture(() => FixFixture(null, null, nativeZones, () => MarkerFixture("other")));
-            Check(discoveryCalls == calls + 1 && run.SpawnZoneScopes == 0 && run.SpawnZoneHits == 0, "Native comparison toggle disables scope on next attempt");
+            _options = Enabled(); _options.ScopedSpawnZones = false;
+            CollectionFixture(() => FixFixture(null, null, _nativeZones, () => Check(SpawnZoneHooks.Lookup != null, "Option edits do not change an in-flight run")));
+            PolicyHooks.Policy.RootFinished(run, true); run = PolicyHooks.Policy.Begin(); calls = _discoveryCalls;
+            CollectionFixture(() => FixFixture(null, null, _nativeZones, () => MarkerFixture("other")));
+            Check(_discoveryCalls == calls + 1 && run.SpawnZoneScopes == 0 && run.SpawnZoneHits == 0, "Native comparison toggle disables scope on next attempt");
             PolicyHooks.Policy.Stop();
             PolicyHooks.Policy = NewPolicy(); run = PolicyHooks.Policy.Begin();
-            CollectionFixture(() => FixFixture(null, null, nativeZones, () => {
-                SpawnZoneHooks.Reset(); calls = discoveryCalls; MarkerFixture("other");
-                Check(discoveryCalls == calls + 1, "Shutdown reset prevents reuse from an abandoned scope");
+            CollectionFixture(() => FixFixture(null, null, _nativeZones, () => {
+                SpawnZoneHooks.Reset(); calls = _discoveryCalls; MarkerFixture("other");
+                Check(_discoveryCalls == calls + 1, "Shutdown reset prevents reuse from an abandoned scope");
             }));
             Check(SpawnZoneHooks.Lookup == null && SpawnZoneHooks.Reconciliation == null, "Late closes do not restore cleared scopes");
             harmony.Patch(Method(nameof(FixFixture)), prefix: new HarmonyMethod(Method(nameof(FixBefore))), postfix: new HarmonyMethod(Method(nameof(FixAfter))));
-            calls = discoveryCalls;
-            CollectionFixture(() => FixFixture(null, null, nativeZones, () => MarkerFixture("other")));
-            Check(beforeClean && afterClean && discoveryCalls == calls + 2, "Ordinary external prefix/postfix callbacks stay outside the native lookup scope");
-            PolicyHooks.Policy.Stop(); calls = discoveryCalls;
-            CollectionFixture(() => FixFixture(null, null, nativeZones, () => MarkerFixture("other")));
-            Check(discoveryCalls == calls + 3, "Native discovery outside raid loading, including external callbacks");
+            calls = _discoveryCalls;
+            CollectionFixture(() => FixFixture(null, null, _nativeZones, () => MarkerFixture("other")));
+            Check(_beforeClean && _afterClean && _discoveryCalls == calls + 2, "Ordinary external prefix/postfix callbacks stay outside the native lookup scope");
+            PolicyHooks.Policy.Stop(); calls = _discoveryCalls;
+            CollectionFixture(() => FixFixture(null, null, _nativeZones, () => MarkerFixture("other")));
+            Check(_discoveryCalls == calls + 3, "Native discovery outside raid loading, including external callbacks");
 
             var instruction = new CodeInstruction(System.Reflection.Emit.OpCodes.Call, discover);
             instruction.labels.Add(default(System.Reflection.Emit.Label));
@@ -339,14 +339,14 @@ public static class FTLSValidation
         }
     }
 
-    private static FTLSValidationZone[] nativeZones;
-    private static int discoveryCalls;
-    private static bool beforeClean, afterClean;
+    private static FTLSValidationZone[] _nativeZones;
+    private static int _discoveryCalls;
+    private static bool _beforeClean, _afterClean;
     private static HarmonyMethod SH(string name, int priority) => new HarmonyMethod(typeof(SpawnZoneHooks), name) { priority = priority };
-    private static void FixBefore() { beforeClean = SpawnZoneHooks.Lookup == null; MarkerFixture("other"); }
-    private static void FixAfter() { afterClean = SpawnZoneHooks.Lookup == null; MarkerFixture("other"); }
+    private static void FixBefore() { _beforeClean = SpawnZoneHooks.Lookup == null; MarkerFixture("other"); }
+    private static void FixAfter() { _afterClean = SpawnZoneHooks.Lookup == null; MarkerFixture("other"); }
     [MethodImpl(MethodImplOptions.NoInlining)] private static T[] DiscoverZones<T>() where T : UnityEngine.Object
-    { discoveryCalls++; return nativeZones.Where(z => z != null && z.gameObject.activeInHierarchy).Cast<T>().ToArray(); }
+    { _discoveryCalls++; return _nativeZones.Where(z => z != null && z.gameObject.activeInHierarchy).Cast<T>().ToArray(); }
     [MethodImpl(MethodImplOptions.NoInlining)] private static FTLSValidationZone MarkerFixture(string name) => DiscoverZones<FTLSValidationZone>().FirstOrDefault(zone => zone.name == name);
     [MethodImpl(MethodImplOptions.NoInlining)] private static void CollectionFixture(Action body) => body();
     [MethodImpl(MethodImplOptions.NoInlining)] private static void FixFixture(object logger, object markers, FTLSValidationZone[] zones, Action body) => body();
@@ -359,32 +359,32 @@ public static class FTLSValidation
         Check(p.Begin() == null, "Nested root cannot replace owner");
         Check(p.AudioBatchSize == 300 && p.NonCollectingMeasurements, "Audio map scope differs from cleanup root scope");
         MapScope first = p.EnterMap(), second = p.EnterMap();
-        Check(priority == 50 && p.AudioBatchSize == 1200 && p.ParallelScenes, "Enabled loading controls");
-        options = new Options { Enabled = false };
+        Check(_priority == 50 && p.AudioBatchSize == 1200 && p.ParallelScenes, "Enabled loading controls");
+        _options = new Options { Enabled = false };
         Check(p.AudioBatchSize == 1200 && p.NonCollectingMeasurements, "Options frozen for current attempt");
-        p.LeaveMap(first); Check(priority == 50, "Nested map retains priority ownership");
+        p.LeaveMap(first); Check(_priority == 50, "Nested map retains priority ownership");
         Task.Run(() => p.LeaveMap(second)).GetAwaiter().GetResult();
-        Check(priority == 50, "Worker completion waits for main-thread pump");
-        p.Pump(); Check(priority == 4 && p.AudioBatchSize == 300, "Last map restores previous priority");
+        Check(_priority == 50, "Worker completion waits for main-thread pump");
+        p.Pump(); Check(_priority == 4 && p.AudioBatchSize == 300, "Last map restores previous priority");
         object marker = new object(); p.AttachMetrics(marker); p.GameStarted(new object());
         Check(p.IsLoading, "Stale metrics ignored");
         p.GameStarted(marker); Check(!p.IsLoading && !p.NonCollectingMeasurements, "Game start ends loading policy");
         run = p.Begin(); first = p.EnterMap();
-        Check(priority == 4 && p.AudioBatchSize == 300 && !p.NonCollectingMeasurements, "Master native comparison mode");
-        p.RootFinished(run, true); Check(!p.IsLoading && priority == 4, "Failed attempt cleanup");
-        p = NewPolicy(); run = p.Begin(); first = p.EnterMap(); priority = 123;
-        p.LeaveMap(first); Check(priority == 123, "Another owner's newer setting is preserved"); p.Stop();
-        p = NewPolicy(); run = p.Begin(); first = p.EnterMap(); tick = 600001; p.Pump();
-        Check(!p.IsLoading && priority == 4 && p.AudioBatchSize == 300, "Timeout restores all controls");
+        Check(_priority == 4 && p.AudioBatchSize == 300 && !p.NonCollectingMeasurements, "Master native comparison mode");
+        p.RootFinished(run, true); Check(!p.IsLoading && _priority == 4, "Failed attempt cleanup");
+        p = NewPolicy(); run = p.Begin(); first = p.EnterMap(); _priority = 123;
+        p.LeaveMap(first); Check(_priority == 123, "Another owner's newer setting is preserved"); p.Stop();
+        p = NewPolicy(); run = p.Begin(); first = p.EnterMap(); _tick = 600001; p.Pump();
+        Check(!p.IsLoading && _priority == 4 && p.AudioBatchSize == 300, "Timeout restores all controls");
         p = NewPolicy(); run = p.Begin(); first = p.EnterMap(); p.Stop(); p.LeaveMap(first);
-        Check(priority == 4 && p.Begin() == null, "Shutdown and late callbacks");
+        Check(_priority == 4 && p.Begin() == null, "Shutdown and late callbacks");
         p = NewPolicy(); run = p.Begin(); p.RootFinished(run, false);
         LoadingRun replacement = p.Begin();
         Check(replacement != null && run.Closed, "Completed pre-start attempt may be superseded"); p.Stop();
-        p = NewPolicy(); options.Priority = LoadingPriority.Native; run = p.Begin(); first = p.EnterMap();
-        Check(priority == 4, "Native integration priority"); p.Stop();
-        p = NewPolicy(); options.Priority = LoadingPriority.Normal; run = p.Begin(); first = p.EnterMap();
-        Check(priority == 10, "Normal integration priority"); p.Stop();
+        p = NewPolicy(); _options.Priority = LoadingPriority.Native; run = p.Begin(); first = p.EnterMap();
+        Check(_priority == 4, "Native integration priority"); p.Stop();
+        p = NewPolicy(); _options.Priority = LoadingPriority.Normal; run = p.Begin(); first = p.EnterMap();
+        Check(_priority == 10, "Normal integration priority"); p.Stop();
     }
 
     private static void TestHooks()
@@ -406,7 +406,7 @@ public static class FTLSValidation
             harmony.Patch(Method(nameof(CleanupFixture)), transpiler: H(nameof(PolicyHooks.MemoryTranspiler)));
             var root = new TaskCompletionSource<int>(); var map = new TaskCompletionSource<int>();
             Check(ReferenceEquals(root.Task, RootTask(root.Task)), "Root Task identity");
-            Check(ReferenceEquals(map.Task, MapTask(map.Task)) && priority == 50, "Map Task identity and entered priority");
+            Check(ReferenceEquals(map.Task, MapTask(map.Task)) && _priority == 50, "Map Task identity and entered priority");
             Check(Preset(false), "Parallel preset flag enabled only in map scope");
             Check(!QueueScene(false), "Unrelated held scene keeps native activation");
             var source = new TaskCompletionSource<int>();
@@ -414,31 +414,31 @@ public static class FTLSValidation
             Check(PolicyHooks.ParallelSchedulingDepth == 0 && !QueueScene(false), "Scheduling guard closes before async wait");
             source.SetResult(1);
             Check(queued.GetAwaiter().GetResult(), "Parallel scenes activate as ready; later/unrelated calls keep native flags");
-            try { _ = ThrowingSchedule(); throw new Exception("Schedule exception suppressed"); } catch (InvalidOperationException) { checks++; }
+            try { _ = ThrowingSchedule(); throw new Exception("Schedule exception suppressed"); } catch (InvalidOperationException) { _checks++; }
             Check(PolicyHooks.ParallelSchedulingDepth == 0, "Scheduling exception restores guard");
-            iteration = 300; Check(!ReachedBatch(), "Audio batch no longer yields at300");
-            iteration = 1200; Check(ReachedBatch(), "Audio batch yields at1200");
-            nativeCalls = 0; explicitCollections = 0; _ = CleanupFixture();
-            Check(nativeCalls == 0 && explicitCollections == 1, "Only diagnostics replaced; explicit cleanup untouched");
-            try { _ = ThrowingMap(); throw new Exception("Map exception suppressed"); } catch (InvalidOperationException) { checks++; }
-            Check(priority == 50, "Failed nested map does not release outer priority");
+            _iteration = 300; Check(!ReachedBatch(), "Audio batch no longer yields at300");
+            _iteration = 1200; Check(ReachedBatch(), "Audio batch yields at1200");
+            _nativeCalls = 0; _explicitCollections = 0; _ = CleanupFixture();
+            Check(_nativeCalls == 0 && _explicitCollections == 1, "Only diagnostics replaced; explicit cleanup untouched");
+            try { _ = ThrowingMap(); throw new Exception("Map exception suppressed"); } catch (InvalidOperationException) { _checks++; }
+            Check(_priority == 50, "Failed nested map does not release outer priority");
             Task.Run(() => map.SetResult(1)).GetAwaiter().GetResult();
-            PolicyHooks.Policy.Pump(); Check(priority == 4, "Asynchronous map completion restores priority");
-            iteration = 300; Check(ReachedBatch() && !Preset(false), "Audio and parallel controls return native after map");
+            PolicyHooks.Policy.Pump(); Check(_priority == 4, "Asynchronous map completion restores priority");
+            _iteration = 300; Check(ReachedBatch() && !Preset(false), "Audio and parallel controls return native after map");
             root.SetCanceled(); PolicyHooks.Policy.Pump();
-            Check(!PolicyHooks.Policy.IsLoading && priority == 4, "Canceled root closes policy");
-            nativeCalls = 0; _ = CleanupFixture(); Check(nativeCalls == 2, "Native diagnostic calls restored outside loading");
-            PolicyHooks.Policy = NewPolicy(); options.AudioBatching = false; options.ParallelScenes = false; options.NonCollectingMeasurements = false;
+            Check(!PolicyHooks.Policy.IsLoading && _priority == 4, "Canceled root closes policy");
+            _nativeCalls = 0; _ = CleanupFixture(); Check(_nativeCalls == 2, "Native diagnostic calls restored outside loading");
+            PolicyHooks.Policy = NewPolicy(); _options.AudioBatching = false; _options.ParallelScenes = false; _options.NonCollectingMeasurements = false;
             LoadingRun run = PolicyHooks.Policy.Begin(); MapScope scope = PolicyHooks.Policy.EnterMap();
-            iteration = 300; Check(ReachedBatch() && !Preset(false), "Independent native audio/parallel controls");
-            nativeCalls = 0; _ = CleanupFixture(); Check(nativeCalls == 2, "Independent native memory control");
+            _iteration = 300; Check(ReachedBatch() && !Preset(false), "Independent native audio/parallel controls");
+            _nativeCalls = 0; _ = CleanupFixture(); Check(_nativeCalls == 2, "Independent native memory control");
             PolicyHooks.Policy.Stop();
             PolicyHooks.Policy = NewPolicy(); run = PolicyHooks.Policy.Begin();
             Task canceled = Task.FromCanceled(new CancellationToken(true));
-            Check(ReferenceEquals(MapTask(canceled), canceled) && priority == 4, "Canceled map preserves Task and restores priority");
+            Check(ReferenceEquals(MapTask(canceled), canceled) && _priority == 4, "Canceled map preserves Task and restores priority");
             Task failed = Task.FromException(new InvalidOperationException("expected async failure"));
-            Check(ReferenceEquals(MapTask(failed), failed) && priority == 4, "Faulted map preserves Task and restores priority");
-            try { failed.GetAwaiter().GetResult(); throw new Exception("Async error suppressed"); } catch (InvalidOperationException) { checks++; }
+            Check(ReferenceEquals(MapTask(failed), failed) && _priority == 4, "Faulted map preserves Task and restores priority");
+            try { failed.GetAwaiter().GetResult(); throw new Exception("Async error suppressed"); } catch (InvalidOperationException) { _checks++; }
             PolicyHooks.Policy.Stop();
             // An ABI mismatch must fail closed instead of modifying a different instruction.
             bool refused = false;
@@ -491,10 +491,7 @@ public static class FTLSValidation
         Assembly game = Assembly.LoadFrom(gamePath);
         Assembly.LoadFrom(Path.Combine(File.ReadAllText(installFile).Trim(), "EscapeFromTarkov_Data/Managed/Unity.ScriptableBuildPipeline.dll"));
         Assembly.LoadFrom(Path.Combine(File.ReadAllText(installFile).Trim(), "BepInEx/plugins/spt/spt-custom.dll"));
-        string timerPath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(installFile), "../../FTLS.LevelStageTimer/plugin/netstandard2.1/FTLS.LevelStageTimer.dll"));
-        Assembly timer = Assembly.LoadFrom(timerPath);
         var probeHarmony = new Harmony("ftls.loading.nativeprobe");
-        var timerHarmony = new Harmony("ftls.loading.timercomposition");
         try
         {
             Func<string, Type> find = name => AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType(name)).FirstOrDefault(t => t != null) ?? game.GetType(name, true);
@@ -508,37 +505,20 @@ public static class FTLSValidation
             TextureQualityWithStreamingValidation.Installed(Check, find);
             StreamingBundlePatchValidation.Installed(Check, File.ReadAllText(installFile).Trim(), Path.GetDirectoryName(installFile));
             HideoutResearchValidation.Installed(Check, find, Path.GetDirectoryName(installFile));
-            Type probes = timer.GetType("FTLS.LevelStageTimer.SceneProbes", true);
-            probes.GetMethod("Install", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, new object[] { timerHarmony, find, new List<string>() });
             SceneBundleHooks.Install(probeHarmony, find);
             Check(true, "Exact installed scene coroutine accepts probe transpiler and live dictionary ABI");
 
-            Type recorderType = timer.GetType("FTLS.LevelStageTimer.Recorder", true);
-            object recorder = Activator.CreateInstance(recorderType, new object[] { 3, 600.0, 2048, 1200, null, 0L });
-            recorderType.GetMethod("Begin").Invoke(recorder, new object[] { "raid", "work", true, -1, 0, null });
-            Type accessType = timer.GetType("FTLS.LevelStageTimer.OperationAccess", true);
-            object access = Activator.CreateInstance(accessType, new object[] { typeof(Comfort.Common.Operation<object>) });
-            Type trackerType = timer.GetType("FTLS.LevelStageTimer.SceneTracker", true);
-            object tracker = Activator.CreateInstance(trackerType, new[] { recorder, access });
-            var owner = new Comfort.Common.Operation<object>();
-            trackerType.GetMethod("Start").Invoke(tracker, new object[] { owner, "Assets/Test.unity", "Assets/Test.unity", "Additive", true });
-            trackerType.GetMethod("BeginBundle").Invoke(tracker, new object[] { owner });
-            Assembly plugin = Assembly.LoadFrom(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(installFile), "../plugin/netstandard2.1/FuckThisLoadingScreen.dll")));
+            Assembly plugin = Assembly.LoadFrom(Path.Combine(Path.GetDirectoryName(installFile), "plugin", "FuckThisLoadingScreen.dll"));
             Assembly.LoadFrom(Path.Combine(File.ReadAllText(installFile).Trim(), "BepInEx/core/BepInEx.dll"));
             plugin.GetType("FuckThisLoadingScreen.Plugin", true).GetMethod("InstallLootBundlePriority", BindingFlags.Static | BindingFlags.NonPublic)
                 .Invoke(null, new object[] { probeHarmony, find });
             Check(true, "Actual built loot-priority hooks compile against installed closed game and bundle methods");
             plugin.GetType("FuckThisLoadingScreen.BoundedScenes", true).GetMethod("Install", BindingFlags.Static | BindingFlags.NonPublic)
                 .Invoke(null, new object[] { probeHarmony, find });
-            Check(true, "Actual bounded scene adapter binds installed ResourceKey extension, fields and direct scheduler");
-            object skippedOperation = Activator.CreateInstance(plugin.GetType("FuckThisLoadingScreen.SceneBundleHooks+SkippedProbe`1", true).MakeGenericType(typeof(object)), true);
-            trackerType.GetMethod("ObserveBundle").Invoke(tracker, new[] { skippedOperation, owner });
-            object capture = recorderType.GetProperty("ActiveCapture", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(recorder);
-            string csv = (string)trackerType.GetMethod("Export").Invoke(null, new[] { capture });
-            Check(csv.Contains("skipped-built-in-scene"), "Timer recognizes skipped probe separately from failed or loaded bundles");
-            trackerType.GetMethod("Stop").Invoke(tracker, null);
+            Check(true, "Actual built bounded scene adapter binds installed ResourceKey extension, fields and direct scheduler");
+            PluginContractValidation.BuiltPlugin(Check, plugin, Path.GetDirectoryName(installFile));
         }
-        finally { probeHarmony.UnpatchSelf(); timerHarmony.UnpatchSelf(); }
+        finally { probeHarmony.UnpatchSelf(); }
         Type actualReader = game.GetType("Audio.SpatialSystem.AudioBakeDataReader", true);
         object instance = Activator.CreateInstance(actualReader);
         FieldInfo counter = actualReader.GetField("_iterationCount");
@@ -567,10 +547,10 @@ public static class FTLSValidation
     [MethodImpl(MethodImplOptions.NoInlining)] private static Task ThrowingLootLaunch() => ThrowingLootBundles();
     [MethodImpl(MethodImplOptions.NoInlining)] private static Task MapTask(Task task) => task;
     [MethodImpl(MethodImplOptions.NoInlining)] private static Task ThrowingMap() => throw new InvalidOperationException("expected");
-    [MethodImpl(MethodImplOptions.NoInlining)] private static bool ReachedBatch() => iteration % 300 == 0;
-    [MethodImpl(MethodImplOptions.NoInlining)] private static float NativeMeasure() { nativeCalls++; return 12f; }
+    [MethodImpl(MethodImplOptions.NoInlining)] private static bool ReachedBatch() => _iteration % 300 == 0;
+    [MethodImpl(MethodImplOptions.NoInlining)] private static float NativeMeasure() { _nativeCalls++; return 12f; }
     [MethodImpl(MethodImplOptions.NoInlining)] private static float CleanupFixture()
-    { float before = NativeMeasure(); explicitCollections++; return before - NativeMeasure(); }
+    { float before = NativeMeasure(); _explicitCollections++; return before - NativeMeasure(); }
     [MethodImpl(MethodImplOptions.NoInlining)] private static bool Preset(bool loadInParallelMode, bool allowSceneActivation = true) => loadInParallelMode;
     [MethodImpl(MethodImplOptions.NoInlining)] private static bool QueueScene(bool allowSceneActivation) => allowSceneActivation;
     [MethodImpl(MethodImplOptions.NoInlining)] private static async Task<bool> ScheduleScenes(Task source)

@@ -1,15 +1,16 @@
 # Build, packages, Unity validation projects and runtime captures
-**/bin/
-**/obj/
-/artifacts/
+bin/
+obj/
+artifacts/
 /TestResults/
+
 # Local-only research tools
 /tools/FTLS.TextureScan/
 /BepInEx/
-**/Library/
-**/Temp/
-**/Logs/
-**/UserSettings/
+Library/
+Temp/
+Logs/
+UserSettings/
 
 # Local editor and agent state
 .vs/
@@ -18,6 +19,7 @@
 .claude/
 .codex/
 .agents/
+.omp/
 *.user
 *.suo
 *.log
@@ -25,3 +27,4 @@
 *.bak
 .DS_Store
 Thumbs.db
+.kata.local.toml

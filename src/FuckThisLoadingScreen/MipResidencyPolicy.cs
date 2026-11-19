@@ -12,7 +12,7 @@ namespace FuckThisLoadingScreen
     internal sealed class MipResidencyPolicy
     {
         internal static MipResidencyPolicy Active;
-        private bool previous, owns;
+        private bool _previous, _owns;
         internal static MipResidencyPolicy Install(Harmony harmony, Func<string, Type> find, Guid module)
         {
             Type graphics = find("EFT.Settings.Graphics.GraphicsSettingsController");
@@ -24,9 +24,9 @@ namespace FuckThisLoadingScreen
             var policy = new MipResidencyPolicy(); policy.Apply(); return policy;
         }
         internal void Apply()
-        { previous = Texture.streamingTextureDiscardUnusedMips; Texture.streamingTextureDiscardUnusedMips = false; owns = true; }
+        { _previous = Texture.streamingTextureDiscardUnusedMips; Texture.streamingTextureDiscardUnusedMips = false; _owns = true; }
         internal void Stop()
-        { if (owns && !Texture.streamingTextureDiscardUnusedMips) Texture.streamingTextureDiscardUnusedMips = previous; owns = false; }
+        { if (_owns && !Texture.streamingTextureDiscardUnusedMips) Texture.streamingTextureDiscardUnusedMips = _previous; _owns = false; }
         internal static void Refreshed() => Active?.Apply();
         internal static IEnumerable<CodeInstruction> Guard(IEnumerable<CodeInstruction> instructions)
         {

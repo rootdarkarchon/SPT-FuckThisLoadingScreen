@@ -1,0 +1,25 @@
+<Project>
+  <!-- Set SptStandaloneTest=true for pure net10 unit-test projects that only link plain sources:
+       it skips the SPT install check and the PluginInfo generation. -->
+  <Target Name="RequireSptInstallPath" BeforeTargets="ResolveAssemblyReferences" Condition="'$(SptStandaloneTest)' != 'true'">
+    <Error Condition="'$(SptInstallPath)' == ''" Text="SptInstallPath is empty. Set the TARKOV_SPT_INSTALL environment variable or pass -p:SptInstallPath=..." />
+    <Error Condition="'$(SptInstallPath)' != '' and !Exists('$(SptInstallPath)/BepInEx/core/BepInEx.dll')" Text="SptInstallPath '$(SptInstallPath)' does not contain BepInEx/core/BepInEx.dll." />
+    <Error Condition="'$(SptInstallPath)' != '' and !Exists('$(SptInstallPath)/EscapeFromTarkov_Data/Managed/Assembly-CSharp.dll')" Text="SptInstallPath '$(SptInstallPath)' does not contain EscapeFromTarkov_Data/Managed/Assembly-CSharp.dll." />
+    <Error Condition="'$(SptProjectKind)' == 'Server' and '$(SptInstallPath)' != '' and !Exists('$(SptInstallPath)/SPT_Runtime/SPTarkov.Server.Core.dll')" Text="SptInstallPath '$(SptInstallPath)' does not contain SPT_Runtime/SPTarkov.Server.Core.dll." />
+  </Target>
+
+  <Target Name="GeneratePluginInfo" BeforeTargets="CoreCompile" Condition="'$(SptStandaloneTest)' != 'true' and '$(SptProjectKind)' != ''">
+    <PropertyGroup>
+      <_PluginInfoFile>$(IntermediateOutputPath)PluginInfo.g.cs</_PluginInfoFile>
+    </PropertyGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <WriteLinesToFile Condition="'$(SptProjectKind)' == 'Client'" File="$(_PluginInfoFile)" Overwrite="true" WriteOnlyWhenDifferent="true" Encoding="UTF-8"
+      Lines="// &lt;auto-generated/&gt;&#xA;namespace $(RootNamespace)%3B&#xA;&#xA;internal static class PluginInfo&#xA;{&#xA;    public const string Guid = &quot;$(PluginGuid)&quot;%3B&#xA;    public const string ModName = &quot;$(ModName)&quot;%3B&#xA;    public const string Name = &quot;$(PluginName)&quot;%3B&#xA;    public const string Version = &quot;$(Version)&quot;%3B&#xA;}" />
+    <WriteLinesToFile Condition="'$(SptProjectKind)' == 'Server'" File="$(_PluginInfoFile)" Overwrite="true" WriteOnlyWhenDifferent="true" Encoding="UTF-8"
+      Lines="// &lt;auto-generated/&gt;&#xA;namespace $(RootNamespace)%3B&#xA;&#xA;internal static class PluginInfo&#xA;{&#xA;    public const string Guid = &quot;$(PluginGuid)&quot;%3B&#xA;    public const string ModGuid = &quot;$(ServerModGuid)&quot;%3B&#xA;    public const string Name = &quot;$(PluginName)&quot;%3B&#xA;    public const string Version = &quot;$(Version)&quot;%3B&#xA;    public const string Author = &quot;$(Authors)&quot;%3B&#xA;}" />
+    <ItemGroup>
+      <Compile Include="$(_PluginInfoFile)" />
+      <FileWrites Include="$(_PluginInfoFile)" />
+    </ItemGroup>
+  </Target>
+</Project>

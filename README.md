@@ -66,7 +66,7 @@ To uninstall, remove its plugin directory and restart the game.
 
 Options are frozen at the start of each loading attempt. Changes during a load
 apply to the next attempt; restart the game for controlled comparisons.
-Experimental options are off by default.
+Experimental options are off by default. Settings are grouped into numbered BepInEx configuration-manager categories; debug, diagnostic and experimental entries sit under "9. Debug". Section and key names are unchanged.
 
 | Section / setting | Default | Comparison setting |
 | --- | --- | --- |
@@ -92,9 +92,10 @@ Experimental options are off by default.
 | Audio / Reader Batch Size | 1200 | Native: 300; range: 300–4800 |
 | Memory / Non-Collecting Diagnostic Measurements | true | false retains native diagnostic queries |
 | Experimental / Parallel Scene Loading | false | Optional unbounded scheduling comparison |
-| Debug / Write Loading Reports | false | true enables per-load report files and summary logs |
+| Debug / Write Loading Reports | false | true enables per-load report files; summary lines go to the log under Debug / Logging |
 | Debug / Write Hideout Research Reports | false | true enables hideout/mip diagnostics; restart required |
-| Debug / Dump Loaded Textures | false | action: true writes one texture inventory to `BepInEx/FuckThisLoadingScreen/TextureInventory`, then resets |
+| Debug / Dump Loaded Textures | false | action: true writes one texture inventory to `BepInEx/config/FuckThisLoadingScreen/dumps/texture-inventory/`, then resets |
+| Debug / Logging | false | true adds `[debug]` log lines; the initialisation line and warnings/errors are always written |
 
 Bounded activation takes precedence over the experimental parallel toggle.
 To compare native scene scheduling, turn **both** scene scheduling toggles off.
@@ -109,68 +110,81 @@ after changing their options or the master switch for these patches. Icon hooks
 stay installed until pending render Tasks finish during plugin cleanup, so
 ownership is not interrupted.
 
-## Reports and stage timer
+## Reports and data
 
 Reports are **off by default**.
 
 - **Loading reports:** enable **Debug / Write Loading Reports** to write per-load
-  option snapshots, outcomes and bounded counters to the BepInEx log and
-  `BepInEx/FuckThisLoadingScreen/`, including frame-cap and scene-scheduling CSVs.
-  Reports are exported after the measured loading run. The toggle does not change
-  any loading optimization.
+  option snapshots, outcomes and bounded counters to
+  `BepInEx/config/FuckThisLoadingScreen/captures/loading-reports/`, including
+  frame-cap and scene-scheduling CSVs. Reports are exported after the measured
+  loading run. The toggle does not change any loading optimization.
 - **Hideout research reports:** enable **Debug / Write Hideout Research Reports**
   and restart. The observer is built into FTLS, works independently of
   **General / Enabled**, and leaves mip settings and native loading behavior alone.
-  Output goes to `BepInEx/FuckThisLoadingScreen/HideoutResearch/<UTC timestamp-id>/`
+  Output goes to `BepInEx/config/FuckThisLoadingScreen/captures/hideout-research/<UTC timestamp-id>/`
   (`capture.txt`, `events.csv`, `samples.csv`, `heartbeat.csv`, `worker.csv`).
   Captures stop automatically. Turn the option off and restart after testing.
   File columns, capture limits and interpretation notes are in
   [CHANGELOG.md](CHANGELOG.md#hideout-research-reports).
 
-For detailed raid stage, per-scene, activation and callback timings, install the
-separate **FTLS Level Stage Timer** package. It is optional and is not included
-in the main mod package. By default it records the next three loading attempts
-per game start and writes to `BepInEx/FTLS.LevelStageTimer/`.
+The optional stage timer is not part of this package. It lives on branch
+`research/startup` of this repository.
 
-See the [timer documentation](tools/FTLS.LevelStageTimer/README.md) for capture
-limits, columns and interpretation. Timings are inclusive wall-clock intervals;
-nested and overlapping rows must not be added as independent CPU costs.
+## Data locations
+
+Settings stay in `BepInEx/config/com.rootdarkarchon.fuckthisloadingscreen.cfg`.
+Runtime files go under `BepInEx/config/FuckThisLoadingScreen/`:
+
+| Kind | Folder |
+| --- | --- |
+| Loading reports (TXT, CSV) | `captures/loading-reports/` |
+| Hideout research | `captures/hideout-research/` |
+| Texture inventory | `dumps/texture-inventory/` |
+| Streamable texture index | `cache/StreamableTextureIndex.txt` |
+
+On first start, existing files in the old `BepInEx/FuckThisLoadingScreen/` folder
+are moved into these folders once, and the old folder is removed if it is empty.
+
+## Logging
+
+FTLS normally writes one initialisation line plus warnings and errors. Enable
+**Debug / Logging** to add `[debug]` lines with progress and counters. Report
+files are still controlled by **Debug / Write Loading Reports**.
+
+## Fika
+
+FTLS declares `com.fika.core` as a soft dependency and contains no Fika-specific
+code. It patches the EFT client loading path listed in
+[docs/patch-targets.md](docs/patch-targets.md). Behaviour on a headless Fika host
+has not been verified.
 
 ## Build from source
 
 Requires the .NET 10 SDK and a supported local SPT installation. Game, BepInEx
 and Harmony assemblies are referenced from that installation and are not bundled
-in this repository. Set `SPT_INSTALL_PATH` or pass the installation path explicitly:
+in this repository. Set `TARKOV_SPT_INSTALL` to the installation folder, or pass
+`-p:SptInstallPath=<folder>` to override it:
 
 ```powershell
-dotnet build .\FuckThisLoadingScreen.slnx -c Release -p:SptInstallPath="D:\Games\SPT"
-.\scripts\Build-Package.ps1 -SptInstallPath "D:\Games\SPT"
+dotnet build .\FuckThisLoadingScreen.slnx -c Release
 ```
 
-The runtime ZIP contains the plugin DLL and MIT license only and is written to
-`bin/Release/`. To package the optional timer:
+`scripts/Build.ps1` builds and packages the plugin. Run
+`Get-Help .\scripts\Build.ps1` for its parameters, and do not install into a
+running game.
 
-```powershell
-.\scripts\Build-LevelStageTimer.ps1 -SptInstallPath "D:\Games\SPT"
-```
-
-Validation additionally requires the Unity 2022.3.43f1 editor. The scripts create
-temporary fixture projects under ignored `obj/` and test with the installed
-Harmony/Mono runtime and game signatures:
-
-```powershell
-.\scripts\Test-FuckThisLoadingScreen.ps1 -SptInstallPath "D:\Games\SPT" -Unity "C:\Path\To\Unity.exe"
-.\scripts\Test-LevelStageTimer.ps1 -SptInstallPath "D:\Games\SPT" -Unity "C:\Path\To\Unity.exe"
-.\scripts\Analyze-LevelStageTimer.ps1 -CapturePath "D:\Games\SPT\BepInEx\FTLS.LevelStageTimer"
-```
+Validation additionally requires the Unity 2022.3.43f1 editor.
+`scripts/Test.ps1` runs the batch validation in
+`tests/FuckThisLoadingScreen.Validation/` and writes to `artifacts/test-output/`.
+Run `Get-Help .\scripts\Test.ps1` for its parameters.
 
 The checks cover loading scopes, restoration, cancellation, bounded scheduling,
 native call-site guards, concurrent decal access, real imported streaming texture
 cleanup, overlapping icon renders, failure/cancellation, settings refresh,
-deferred cleanup, player queue recovery, retained-Task reference release,
-small/large texture minimum-mip defaults and optional timer integration. They do not replace live
-raid testing. Build outputs, captures, game binaries and local editor state are
-excluded from Git.
+deferred cleanup, player queue recovery, retained-Task reference release and
+small/large texture minimum-mip defaults. They do not replace live raid testing.
+Build outputs, captures, game binaries and local editor state are excluded from Git.
 
 ## License
 

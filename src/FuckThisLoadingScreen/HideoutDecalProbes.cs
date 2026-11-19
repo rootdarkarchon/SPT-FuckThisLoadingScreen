@@ -13,55 +13,55 @@ namespace FuckThisLoadingScreen
     internal sealed class HideoutDecalState
     {
         internal const string Header = "elapsed_ms,worker_thread_id,worker_phase,thread_state,tree_lock_held,tree_lock_age_ms,trees_at_acquisition,last_lock_hold_ms,max_lock_hold_ms,lock_acquisitions";
-        private readonly Func<HideoutResearchCapture> capture;
-        private readonly Func<int> treeCount;
-        private Thread worker;
-        private volatile string phase = "not-observed";
-        private int held, trees = -1;
-        private long acquired, lastHold, maxHold, acquisitions;
+        private readonly Func<HideoutResearchCapture> _capture;
+        private readonly Func<int> _treeCount;
+        private Thread _worker;
+        private volatile string _phase = "not-observed";
+        private int _held, _trees = -1;
+        private long _acquired, _lastHold, _maxHold, _acquisitions;
 
         internal HideoutDecalState(Func<HideoutResearchCapture> capture, Func<int> treeCount)
-        { this.capture = capture; this.treeCount = treeCount; }
+        { this._capture = capture; this._treeCount = treeCount; }
 
         internal void Started()
         {
-            worker = Thread.CurrentThread; Volatile.Write(ref held, 0); phase = "running";
-            capture()?.Note("decals.texture-worker", "started thread=" + worker.ManagedThreadId);
+            _worker = Thread.CurrentThread; Volatile.Write(ref _held, 0); _phase = "running";
+            _capture()?.Note("decals.texture-worker", "started thread=" + _worker.ManagedThreadId);
         }
-        internal void Waiting() { phase = "waiting-tree-lock"; }
+        internal void Waiting() { _phase = "waiting-tree-lock"; }
         internal void Acquired()
         {
-            Interlocked.Exchange(ref acquired, Stopwatch.GetTimestamp());
-            Volatile.Write(ref held, 1); phase = "holding-tree-lock"; Interlocked.Increment(ref acquisitions);
+            Interlocked.Exchange(ref _acquired, Stopwatch.GetTimestamp());
+            Volatile.Write(ref _held, 1); _phase = "holding-tree-lock"; Interlocked.Increment(ref _acquisitions);
             // Called only after the native worker has acquired the lock already.
-            try { Volatile.Write(ref trees, treeCount()); } catch { Volatile.Write(ref trees, -1); }
+            try { Volatile.Write(ref _trees, _treeCount()); } catch { Volatile.Write(ref _trees, -1); }
         }
         internal void Released()
         {
-            long ticks = Stopwatch.GetTimestamp() - Interlocked.Read(ref acquired);
-            Volatile.Write(ref held, 0); Interlocked.Exchange(ref lastHold, ticks);
-            if (ticks > Interlocked.Read(ref maxHold)) Interlocked.Exchange(ref maxHold, ticks);
-            phase = "running";
+            long ticks = Stopwatch.GetTimestamp() - Interlocked.Read(ref _acquired);
+            Volatile.Write(ref _held, 0); Interlocked.Exchange(ref _lastHold, ticks);
+            if (ticks > Interlocked.Read(ref _maxHold)) Interlocked.Exchange(ref _maxHold, ticks);
+            _phase = "running";
         }
         internal void Exited(Exception exception)
         {
             // If a native exception escaped while holding the lock, retain held=true as evidence.
-            phase = exception == null ? "exited" : "threw:" + exception.GetType().Name;
-            capture()?.Note("decals.texture-worker", phase + " thread=" + Thread.CurrentThread.ManagedThreadId);
+            _phase = exception == null ? "exited" : "threw:" + exception.GetType().Name;
+            _capture()?.Note("decals.texture-worker", _phase + " thread=" + Thread.CurrentThread.ManagedThreadId);
         }
         internal HideoutResearchSpan BeginWait(string stage, string detail)
-        { try { return capture()?.Begin(stage, detail: detail); } catch { return null; } }
+        { try { return _capture()?.Begin(stage, detail: detail); } catch { return null; } }
         internal string Snapshot()
         {
-            Thread observed = worker;
+            Thread observed = _worker;
             string state;
             try { state = observed == null ? "not-observed" : observed.ThreadState.ToString(); } catch { state = "unavailable"; }
-            bool locked = Volatile.Read(ref held) != 0;
-            double age = locked ? (Stopwatch.GetTimestamp() - Interlocked.Read(ref acquired)) * 1000.0 / Stopwatch.Frequency : 0;
-            return (observed?.ManagedThreadId ?? 0) + "," + HideoutResearchCapture.Quote(phase) + "," + HideoutResearchCapture.Quote(state) + "," +
-                (locked ? "true" : "false") + "," + HideoutResearchCapture.Number(age) + "," + Volatile.Read(ref trees) + "," +
-                HideoutResearchCapture.Number(Interlocked.Read(ref lastHold) * 1000.0 / Stopwatch.Frequency) + "," +
-                HideoutResearchCapture.Number(Interlocked.Read(ref maxHold) * 1000.0 / Stopwatch.Frequency) + "," + Interlocked.Read(ref acquisitions);
+            bool locked = Volatile.Read(ref _held) != 0;
+            double age = locked ? (Stopwatch.GetTimestamp() - Interlocked.Read(ref _acquired)) * 1000.0 / Stopwatch.Frequency : 0;
+            return (observed?.ManagedThreadId ?? 0) + "," + HideoutResearchCapture.Quote(_phase) + "," + HideoutResearchCapture.Quote(state) + "," +
+                (locked ? "true" : "false") + "," + HideoutResearchCapture.Number(age) + "," + Volatile.Read(ref _trees) + "," +
+                HideoutResearchCapture.Number(Interlocked.Read(ref _lastHold) * 1000.0 / Stopwatch.Frequency) + "," +
+                HideoutResearchCapture.Number(Interlocked.Read(ref _maxHold) * 1000.0 / Stopwatch.Frequency) + "," + Interlocked.Read(ref _acquisitions);
         }
     }
 
