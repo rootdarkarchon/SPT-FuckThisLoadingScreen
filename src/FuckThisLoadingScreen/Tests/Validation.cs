@@ -36,7 +36,7 @@ public static class FTLSValidation
         string project = Directory.GetParent(UnityEngine.Application.dataPath).FullName;
         try
         {
-            TestPolicy(); TestHooks(); TestLootPriority(); TestFrameCap(); BoundedSceneValidation.Run(Check); TestSpawnZones(); TestSceneProbes(project); TestInstalled(Path.Combine(project, "install.txt"));
+            TestPolicy(); TestHooks(); BotProfilePreloadDelayValidation.Run(Check); TestLootPriority(); TestFrameCap(); BoundedSceneValidation.Run(Check); TestSpawnZones(); TestSceneProbes(project); TextureWorkerTeardownValidation.Run(Check); MipStreamingValidation.Run(Check, project); TextureInventoryValidation.Run(Check, project); MipBudgetAccountingValidation.Run(Check); HideoutResearchValidation.Run(Check, project); TestInstalled(Path.Combine(project, "install.txt"));
             File.WriteAllText(Path.Combine(project, "result.txt"), $"PASS: {checks} loading scope, task/scene scheduling, transpiler and installed-ABI checks. No live loading-speed acceptance claimed.\n");
             UnityEngine.Debug.Log($"PASS: {checks} FTLS checks");
             EditorApplication.Exit(0);
@@ -498,6 +498,16 @@ public static class FTLSValidation
         try
         {
             Func<string, Type> find = name => AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType(name)).FirstOrDefault(t => t != null) ?? game.GetType(name, true);
+            BotProfilePreloadDelayValidation.Installed(Check, find);
+            TextureWorkerTeardownValidation.Installed(Check, find);
+            MipStreamingValidation.Installed(Check, find);
+            MipBudgetAccountingValidation.Installed(Check, find);
+            IconMipProbeValidation.Installed(Check, find, Path.GetDirectoryName(installFile));
+            DecalMipProbeValidation.Installed(Check, find, Path.GetDirectoryName(installFile));
+            DecalTextureArrayResyncValidation.Installed(Check, find);
+            TextureQualityWithStreamingValidation.Installed(Check, find);
+            StreamingBundlePatchValidation.Installed(Check, File.ReadAllText(installFile).Trim(), Path.GetDirectoryName(installFile));
+            HideoutResearchValidation.Installed(Check, find, Path.GetDirectoryName(installFile));
             Type probes = timer.GetType("FTLS.LevelStageTimer.SceneProbes", true);
             probes.GetMethod("Install", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, new object[] { timerHarmony, find, new List<string>() });
             SceneBundleHooks.Install(probeHarmony, find);

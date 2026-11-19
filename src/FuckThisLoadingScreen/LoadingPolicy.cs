@@ -10,10 +10,10 @@ namespace FuckThisLoadingScreen
 
     internal sealed class Options
     {
-        public bool Enabled, AudioBatching, NonCollectingMeasurements, ParallelScenes, ScopedSpawnZones, SkipBuiltInSceneProbes, LootBundlePriority, FrameCapOverride, BoundedScenes, DebugReports;
+        public bool Enabled, AudioBatching, NonCollectingMeasurements, ParallelScenes, ScopedSpawnZones, SkipBuiltInSceneProbes, LootBundlePriority, FrameCapOverride, BoundedScenes, DebugReports, ReduceBotProfilePreloadDelay;
         public int AudioBatchSize, LoadingFrameLimit = 240, SceneWindow = 2;
         public LoadingPriority Priority;
-        public override string ToString() => $"Enabled={Enabled}; AudioBatching={AudioBatching}; AudioBatchSize={AudioBatchSize}; NonCollectingMeasurements={NonCollectingMeasurements}; Priority={Priority}; ParallelScenes={ParallelScenes}; ScopedSpawnZones={ScopedSpawnZones}; SkipBuiltInSceneProbes={SkipBuiltInSceneProbes}; LootBundlePriority={LootBundlePriority}; FrameCapOverride={FrameCapOverride}; LoadingFrameLimit={LoadingFrameLimit}; BoundedScenes={BoundedScenes}; SceneWindow={SceneWindow}; DebugReports={DebugReports}";
+        public override string ToString() => $"Enabled={Enabled}; AudioBatching={AudioBatching}; AudioBatchSize={AudioBatchSize}; NonCollectingMeasurements={NonCollectingMeasurements}; Priority={Priority}; ParallelScenes={ParallelScenes}; ScopedSpawnZones={ScopedSpawnZones}; SkipBuiltInSceneProbes={SkipBuiltInSceneProbes}; LootBundlePriority={LootBundlePriority}; FrameCapOverride={FrameCapOverride}; LoadingFrameLimit={LoadingFrameLimit}; BoundedScenes={BoundedScenes}; SceneWindow={SceneWindow}; DebugReports={DebugReports}; ReduceBotProfilePreloadDelay={ReduceBotProfilePreloadDelay}";
     }
 
     internal sealed class LoadingRun
@@ -33,6 +33,7 @@ namespace FuckThisLoadingScreen
         public readonly List<FrameCapRow> FrameCaps = new List<FrameCapRow>();
         public readonly List<SceneScheduleRow> Schedules = new List<SceneScheduleRow>();
         public int DroppedFrameCaps, DroppedSchedules;
+        public int BotPreloadDelaysReduced, BotPreloadDelayNominalSavedMs;
     }
 
     internal sealed class MapScope
@@ -77,6 +78,17 @@ namespace FuckThisLoadingScreen
         }
 
         public bool IsLoading => current != null;
+        internal int BotProfileDelay(int milliseconds)
+        {
+            LoadingRun run = current;
+            if (milliseconds != BotProfilePreloadDelay.NativeMilliseconds || run == null || run.Closed ||
+                !run.Options.Enabled || !run.Options.ReduceBotProfilePreloadDelay ||
+                Environment.CurrentManagedThreadId != mainThread) return milliseconds;
+            Interlocked.Increment(ref run.BotPreloadDelaysReduced);
+            Interlocked.Add(ref run.BotPreloadDelayNominalSavedMs,
+                BotProfilePreloadDelay.NativeMilliseconds - BotProfilePreloadDelay.ReducedMilliseconds);
+            return BotProfilePreloadDelay.ReducedMilliseconds;
+        }
         public LoadingRun BoundedSceneRun
         {
             get
@@ -287,7 +299,7 @@ namespace FuckThisLoadingScreen
             if (ReferenceEquals(current, run)) current = null;
             if (!run.Options.DebugReports) return;
             // The plugin buffers this small report until a later Update outside a loading run.
-            report($"{DateTime.UtcNow:O} | {outcome} | {run.Options} | NonCollectingCalls={run.NonCollectingCalls}; SpawnZoneScopes={run.SpawnZoneScopes}; SpawnZoneHits={run.SpawnZoneHits}; SpawnZoneNativeCalls={run.SpawnZoneNativeCalls}; SpawnZoneInvalidations={run.SpawnZoneInvalidations}; SceneProbeRequests={run.SceneProbeRequests}; SceneProbeSkipped={run.SceneProbeSkipped}; SceneProbeNative={run.SceneProbeNative}; SceneProbeGuardMs={(run.SceneProbeGuardTicks * 1000.0 / Stopwatch.Frequency).ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}; SceneProbeFallbacks[Shape,BuiltIn,Location,Manifest,Registered,ExistingOperation,File,ObserverError]={string.Join(",", run.SceneProbeFallbacks)}; SceneProbeFirstError={run.SceneProbeFirstError ?? "none"}; LootBundleScopes={run.LootBundleScopes}; LootBundlePriorityScopes={run.LootBundlePriorityScopes}; LootBundleScopeMs={(run.LootBundleScopeTicks * 1000.0 / frequency).ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}; FrameCapRecords={run.FrameCaps.Count}; DroppedFrameCapRecords={run.DroppedFrameCaps}; SceneScheduleRecords={run.Schedules.Count}; DroppedSceneScheduleRecords={run.DroppedSchedules}", run);
+            report($"{DateTime.UtcNow:O} | {outcome} | {run.Options} | NonCollectingCalls={run.NonCollectingCalls}; SpawnZoneScopes={run.SpawnZoneScopes}; SpawnZoneHits={run.SpawnZoneHits}; SpawnZoneNativeCalls={run.SpawnZoneNativeCalls}; SpawnZoneInvalidations={run.SpawnZoneInvalidations}; SceneProbeRequests={run.SceneProbeRequests}; SceneProbeSkipped={run.SceneProbeSkipped}; SceneProbeNative={run.SceneProbeNative}; SceneProbeGuardMs={(run.SceneProbeGuardTicks * 1000.0 / Stopwatch.Frequency).ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}; SceneProbeFallbacks[Shape,BuiltIn,Location,Manifest,Registered,ExistingOperation,File,ObserverError]={string.Join(",", run.SceneProbeFallbacks)}; SceneProbeFirstError={run.SceneProbeFirstError ?? "none"}; LootBundleScopes={run.LootBundleScopes}; LootBundlePriorityScopes={run.LootBundlePriorityScopes}; LootBundleScopeMs={(run.LootBundleScopeTicks * 1000.0 / frequency).ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}; BotPreloadDelaysReduced={run.BotPreloadDelaysReduced}; BotPreloadDelayNominalSavedMs={run.BotPreloadDelayNominalSavedMs}; FrameCapRecords={run.FrameCaps.Count}; DroppedFrameCapRecords={run.DroppedFrameCaps}; SceneScheduleRecords={run.Schedules.Count}; DroppedSceneScheduleRecords={run.DroppedSchedules}", run);
         }
         public void Stop()
         {

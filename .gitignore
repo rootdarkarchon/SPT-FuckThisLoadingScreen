@@ -3,6 +3,8 @@
 **/obj/
 /artifacts/
 /TestResults/
+# Local-only research tools
+/tools/FTLS.TextureScan/
 /BepInEx/
 **/Library/
 **/Temp/
