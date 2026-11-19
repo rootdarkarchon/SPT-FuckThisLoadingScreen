@@ -26,16 +26,17 @@ Defined in `src/FuckThisLoadingScreen/Plugin.cs` (config binding) and `src/FuckT
   - General | Enabled
   - Debug | Write Loading Reports, Dump Loaded Textures, Write Hideout Research Reports, Logging
   - Loading | Stop Texture Worker Before Teardown, Integration Priority, Extend Priority Through Loot Bundles, Reduce Bot Profile Preload Delay, Loading Frame Cap Override, Loading Frame Limit, Scoped Spawn Zone Lookup, Skip Built-In Scene Bundle Probes
-  - Mip Streaming | Synchronize Decal Results, Resync Decal Texture Arrays, Release Icon Mip Requests, Account For Nonstreaming Textures, Apply Texture Quality With Streaming, Mark Item Textures Streamable
+  - Mip Streaming | Synchronize Decal Results, Resync Decal Texture Arrays, Release Icon Mip Requests, Account For Nonstreaming Textures, Apply Texture Quality With Streaming, Mark Item Textures Streamable, Streaming Budget Override, Measure Streaming Budget, Apply Measured Budget
   - Experimental | Retain Unused Streamed Mips, Parallel Scene Loading
   - Audio | Larger Reader Batches, Reader Batch Size
   - Memory | Non-Collecting Diagnostic Measurements
   - Scenes | Bounded As-Ready Scene Activation, Scene In-Flight Limit
 - `LoadingPriority` enum values (persisted through Integration Priority): `Native`, `Normal`, `High`.
-- Display categories (`ConfigurationManagerAttributes.Category`) are display metadata and may change; the keys above may not. Current categories: "1. General", "2. Loading", "3. Scenes", "4. Audio", "5. Mip Streaming" (non-experimental), "9. Debug" (advanced: Debug, Experimental, Memory diagnostics, and the two experimental Mip Streaming entries).
+- Display categories (`ConfigurationManagerAttributes.Category`) are display metadata and may change; the keys above may not. Current categories: "1. General", "2. Loading", "3. Scenes", "4. Audio", "5. Mip Streaming" (all Mip Streaming keys), "9. Debug" (advanced: Debug, Experimental, Memory diagnostics).
 - Runtime data (moved from `BepInEx/FuckThisLoadingScreen/` on first start, see `ModPaths`):
   - loading reports (TXT/CSV) → `BepInEx/config/FuckThisLoadingScreen/captures/loading-reports/`
   - hideout research → `BepInEx/config/FuckThisLoadingScreen/captures/hideout-research/`
   - texture inventory → `BepInEx/config/FuckThisLoadingScreen/dumps/texture-inventory/`
+  - streaming budget measurements → `BepInEx/config/FuckThisLoadingScreen/dumps/streaming-budget/`
   - `StreamableTextureIndex.txt` → `BepInEx/config/FuckThisLoadingScreen/cache/StreamableTextureIndex.txt`
 - Dependencies declared in `Plugin.cs`: `com.SPT.custom` (hard), `com.fika.core` (soft; no Fika-specific code).

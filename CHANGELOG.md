@@ -22,9 +22,9 @@ unattributed. Startup behavior in the main FTLS plugin is unchanged.
   `BotPreloadDelaysReduced` and `BotPreloadDelayNominalSavedMs`. Two shortened waits
   remove 998 ms of requested delay. These counters do not measure the actual
   raid-loading improvement.
-- **Texture inventory dump** (Debug / Dump Loaded Textures, action). Setting it to true
-  writes one texture inventory to `BepInEx/config/FuckThisLoadingScreen/dumps/texture-inventory`,
-  then resets.
+- **Texture inventory dump** (Debug / Dump Loaded Textures, button). Each press of
+  "Dump loaded textures now" writes one texture inventory to
+  `BepInEx/config/FuckThisLoadingScreen/dumps/texture-inventory`.
 - **Hideout research reports** (Debug / Write Hideout Research Reports, default false,
   restart required). See "Hideout research reports" below.
 - **Mip budget accounting** (Mip Streaming / Account For Nonstreaming Textures). See
@@ -34,6 +34,17 @@ unattributed. Startup behavior in the main FTLS plugin is unchanged.
 - **Decal result synchronization** (Mip Streaming / Synchronize Decal Results).
 - **Decal texture-array resync** (Mip Streaming / Resync Decal Texture Arrays). See
   1.0.10 in the development history.
+- **Streaming budget override and measurement** (Mip Streaming / Streaming Budget
+  Override, Measure Streaming Budget, Apply Measured Budget). The override (MiB,
+  default 0 = EFT's per-map value) replaces EFT's selected streamed-texture allowance
+  in the budget accounting, higher or lower, on every map; it needs Account For
+  Nonstreaming Textures and applies on the next 500 ms poll. **Measure** samples
+  texture counters and the DXGI video-memory query every 250 ms for 60 s in a raid,
+  shows a verdict and a recommendation (the VRAM headroom, rounded down to 64 MiB)
+  in the menu and writes a file to
+  `BepInEx/config/FuckThisLoadingScreen/dumps/streaming-budget`; **Apply** sets the
+  override to it. Research snapshots gain a trailing `mip_budget_effective_mb`
+  column. Not yet verified in a live raid.
 
 ### Changed
 
@@ -93,26 +104,18 @@ unattributed. Startup behavior in the main FTLS plugin is unchanged.
   rectangles (puddle decals drawn as solid wet rectangles) were confirmed fixed in a
   Customs raid.
 
-### Experimental
+### Texture memory (on by default)
 
-Off by default. Each needs a restart after changing.
+Both need a restart after changing. With streaming off they do nothing.
 
-- **Retain Unused Streamed Mips** (Experimental / Retain Unused Streamed Mips, default
-  false). The dependency-retention budget remains game-controlled by default. The
-  option permits Unity caching of unused mips within the selected streaming memory
-  budget. Forced eviction is a policy choice and its live cost has not been measured
-  ([Unity's discard/caching contract](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/Texture-streamingTextureDiscardUnusedMips.html)).
-  Large scenes still require native engine integration; faster scheduling does not
-  eliminate that cost. Loading times vary with map, hardware, cache state, loot and
-  other plugins.
 - **Apply Texture Quality With Streaming** (Mip Streaming / Apply Texture Quality With
-  Streaming, default false). EFT's `ChangeTexturesQuality` forces
+  Streaming, default true). EFT's `ChangeTexturesQuality` forces
   `QualitySettings.globalTextureMipmapLimit` to 0 whenever mip streaming is on, so
   Medium/Low texture quality no longer reduces textures that cannot stream (about 5 GiB
   on Streets). This keeps EFT's own streaming-off limit (`TextureQualityToMipBias`:
   Medium drops one mip, Low two) with streaming on. The log reports each application.
 - **Mark Item Textures Streamable** (Mip Streaming / Mark Item Textures Streamable,
-  default false). While EFT loads an uncompressed bundle from `assets/content/items` or
+  default true). While EFT loads an uncompressed bundle from `assets/content/items` or
   `assets/content/weapons`, the `LoadFromFileAsync` call is served by
   `AssetBundle.LoadFromStreamAsync` over a read-only stream of the original file. That
   stream returns 1 at the serialized `m_StreamingMipmaps` byte of each eligible texture
@@ -136,6 +139,19 @@ dedicated memory; texture inventory estimates in parentheses): High 14.5 GB;
 High + Mark Item Textures Streamable 13.6 GB (nonstreaming Texture2D -1.16 GiB);
 Medium 15 GB; Medium + Apply Texture Quality 10.8 GB (Texture2D and arrays about
 -4.2 GiB); Medium + both 9.9 GB. Visual acceptance is pending.
+
+### Experimental
+
+Off by default. Needs a restart after changing.
+
+- **Retain Unused Streamed Mips** (Experimental / Retain Unused Streamed Mips, default
+  false). The dependency-retention budget remains game-controlled by default. The
+  option permits Unity caching of unused mips within the selected streaming memory
+  budget. Forced eviction is a policy choice and its live cost has not been measured
+  ([Unity's discard/caching contract](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/Texture-streamingTextureDiscardUnusedMips.html)).
+  Large scenes still require native engine integration; faster scheduling does not
+  eliminate that cost. Loading times vary with map, hardware, cache state, loot and
+  other plugins.
 
 ### Testing status
 

@@ -12,23 +12,28 @@ namespace FuckThisLoadingScreen
     internal sealed class MipBudgetAccounting
     {
         internal static MipBudgetAccounting Active;
-        internal const string Header = "mip_budget_base_mb,mip_budget_nonstream_mb,mip_budget_icon_mb,mip_budget_accounting";
+        internal const string Header = "mip_budget_base_mb,mip_budget_nonstream_mb,mip_budget_icon_mb,mip_budget_accounting,mip_budget_effective_mb";
         private readonly Func<float> _selected, _read;
         private readonly Action<float> _write;
         private readonly Func<ulong> _nonstreaming;
         private readonly Func<bool> _streaming;
         private readonly Func<int> _icons;
         private readonly Func<double> _clock;
+        private readonly Func<int> _override;
         private float _applied;
         private double _nextPoll;
         private bool _owns, _stopped;
+        /// <summary>EFT's selected streamed-texture allowance, as last read. Never replaced by the override.</summary>
         internal float BaseBudget { get; private set; }
+        /// <summary>The streamed-texture allowance in the total: the Streaming Budget Override when set and accounting is active, else <see cref="BaseBudget"/>.</summary>
+        internal float EffectiveBudget { get; private set; }
         internal float NonstreamingAllowance { get; private set; }
         internal float IconAllowance { get; private set; }
         internal string State { get; private set; } = "unarmed";
 
+        /// <param name="budgetOverride">Streaming Budget Override in MiB. Above 0 it replaces EFT's selected allowance (higher or lower); 0, a negative value or null keeps it. Read on every poll.</param>
         internal MipBudgetAccounting(Func<float> selected, Func<float> read, Action<float> write,
-            Func<ulong> nonstreaming, Func<bool> streaming, Func<int> icons, Func<double> clock)
+            Func<ulong> nonstreaming, Func<bool> streaming, Func<int> icons, Func<double> clock, Func<int> budgetOverride = null)
         {
             _selected = selected;
             _read = read;
@@ -37,8 +42,9 @@ namespace FuckThisLoadingScreen
             _streaming = streaming;
             _icons = icons;
             _clock = clock;
+            _override = budgetOverride;
         }
-        internal static MipBudgetAccounting Install(Harmony harmony, Func<string, Type> find, Guid module)
+        internal static MipBudgetAccounting Install(Harmony harmony, Func<string, Type> find, Guid module, Func<int> budgetOverride = null)
         {
             Type graphics = find("EFT.Settings.Graphics.GraphicsSettingsController");
             if (graphics.Module.ModuleVersionId != module)
@@ -51,7 +57,7 @@ namespace FuckThisLoadingScreen
             harmony.Patch(refresh, postfix: new HarmonyMethod(typeof(MipBudgetAccounting), nameof(Refreshed)) { priority = Priority.Last });
             var policy = new MipBudgetAccounting(() => (float)field.GetValue(null), () => QualitySettings.streamingMipmapsMemoryBudget,
                 value => QualitySettings.streamingMipmapsMemoryBudget = value, () => Texture.nonStreamingTextureMemory,
-                () => QualitySettings.streamingMipmapsActive, () => IconMipLifetime.ActiveBudgets, () => HideoutResearchCapture.Now);
+                () => QualitySettings.streamingMipmapsActive, () => IconMipLifetime.ActiveBudgets, () => HideoutResearchCapture.Now, budgetOverride);
             policy.NativePolicyWritten();
             return policy;
         }
@@ -87,7 +93,9 @@ namespace FuckThisLoadingScreen
             { _owns = false; State = "invalid-base"; return; }
             bool enabled = _streaming();
             NonstreamingAllowance = enabled ? (float)Math.Ceiling(_nonstreaming() / 1048576.0) : 0f;
-            float total = BaseBudget + NonstreamingAllowance + IconAllowance;
+            int budgetOverride = _override?.Invoke() ?? 0;
+            EffectiveBudget = enabled && budgetOverride > 0 ? budgetOverride : BaseBudget;
+            float total = EffectiveBudget + NonstreamingAllowance + IconAllowance;
             if (float.IsInfinity(total))
             { _owns = false; State = "invalid-total"; return; }
             if (total != _applied)
@@ -108,9 +116,9 @@ namespace FuckThisLoadingScreen
         internal static string Snapshot()
         {
             var policy = Active;
-            return policy == null ? ",,,\"disabled\"" : HideoutResearchCapture.Number(policy.BaseBudget) + "," +
+            return policy == null ? ",,,\"disabled\"," : HideoutResearchCapture.Number(policy.BaseBudget) + "," +
                 HideoutResearchCapture.Number(policy.NonstreamingAllowance) + "," + HideoutResearchCapture.Number(policy.IconAllowance) + "," +
-                HideoutResearchCapture.Quote(policy.State);
+                HideoutResearchCapture.Quote(policy.State) + "," + HideoutResearchCapture.Number(policy.EffectiveBudget);
         }
     }
 }

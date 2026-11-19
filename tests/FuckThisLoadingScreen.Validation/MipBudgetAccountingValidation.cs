@@ -50,6 +50,49 @@ internal static class MipBudgetAccountingValidation
             () => nonstream, () => true, () => 0, () => tick);
         invalid.NativePolicyWritten();
         check(actual == 1600 && invalid.State == "invalid-base", "Invalid selected budgets cannot propagate a nonfinite corrected total");
+        Override(check);
+    }
+
+    private static void Override(Action<bool, string> check)
+    {
+        float selected = 2250, actual = 2250;
+        ulong nonstream = 400UL * 1048576;
+        bool streaming = true;
+        double tick = 0;
+        int budgetOverride = 0;
+        var policy = new MipBudgetAccounting(() => selected, () => actual, value => actual = value,
+            () => nonstream, () => streaming, () => 0, () => tick, () => budgetOverride);
+        policy.NativePolicyWritten();
+        check(actual == 2650 && policy.EffectiveBudget == 2250 && policy.BaseBudget == 2250, "Override 0 leaves EFT's selected budget unchanged");
+        budgetOverride = 1000; tick = 500; policy.Pump();
+        check(actual == 1400 && policy.EffectiveBudget == 1000 && policy.BaseBudget == 2250, "An override below EFT's budget lowers the total while BaseBudget keeps reporting EFT's value");
+        budgetOverride = 4000; tick = 1000; policy.Pump();
+        check(actual == 4400 && policy.EffectiveBudget == 4000, "An override above EFT's budget raises the total");
+        budgetOverride = 3000; tick = 1200; policy.Pump();
+        check(actual == 4400, "A changed override waits for the next 500 ms poll");
+        tick = 1500; policy.Pump();
+        check(actual == 3400 && policy.EffectiveBudget == 3000, "A changed override is picked up on the next poll without a restart");
+        budgetOverride = -5; tick = 2000; policy.Pump();
+        check(actual == 2650 && policy.EffectiveBudget == 2250, "A negative override is treated as unset");
+        budgetOverride = 3000; tick = 2500; policy.Pump();
+        selected = 1600; actual = 1600; policy.NativePolicyWritten();
+        check(actual == 3400 && policy.BaseBudget == 1600 && policy.EffectiveBudget == 3000, "A native map refresh keeps the override instead of adopting EFT's new value");
+        policy.Stop();
+        check(actual == 1600 && policy.State == "stopped", "Shutdown restores EFT's selected budget, not the override");
+
+        selected = 2250; actual = 2250; streaming = false; budgetOverride = 3000;
+        var off = new MipBudgetAccounting(() => selected, () => actual, value => actual = value,
+            () => nonstream, () => streaming, () => 0, () => tick, () => budgetOverride);
+        off.NativePolicyWritten();
+        check(actual == 2250 && off.EffectiveBudget == 2250 && off.State == "streaming-off", "The override does nothing while mip streaming is off");
+
+        selected = float.NaN; actual = 1700; streaming = true;
+        var invalid = new MipBudgetAccounting(() => selected, () => actual, value => actual = value,
+            () => nonstream, () => streaming, () => 0, () => tick, () => budgetOverride);
+        invalid.NativePolicyWritten();
+        check(actual == 1700 && invalid.State == "invalid-base", "An override cannot mask an invalid EFT base budget");
+        check(MipBudgetAccounting.Header.Split(',').Length == 5 && MipBudgetAccounting.Header.EndsWith("mip_budget_effective_mb", StringComparison.Ordinal),
+            "Snapshot header ends with the effective budget column");
     }
 
     internal static void Installed(Action<bool, string> check, Func<string, Type> find)
@@ -91,7 +134,7 @@ internal static class MipBudgetAccountingValidation
             check(IconMipLifetime.ActiveBudgets == 0 && policy.IconAllowance == 0 &&
                 QualitySettings.streamingMipmapsMemoryBudget == 1600 + policy.NonstreamingAllowance && QualitySettings.streamingMipmapsMaxLevelReduction == 2,
                 "Failed final installed render removes icon boost, restores reduction and preserves corrected world budget");
-            check(MipBudgetAccounting.Snapshot().Split(',').Length == 4 && MipBudgetAccounting.Snapshot().Contains("\"active\""),
+            check(MipBudgetAccounting.Snapshot().Split(',').Length == 5 && MipBudgetAccounting.Snapshot().Contains("\"active\""),
                 "Research exports base, residency, icon allowance and active accounting state");
             QualitySettings.streamingMipmapsMemoryBudget = 8500;
             policy.IconsFinished(); policy.Stop();

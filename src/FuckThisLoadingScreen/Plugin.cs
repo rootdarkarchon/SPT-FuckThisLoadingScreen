@@ -110,6 +110,7 @@ namespace FuckThisLoadingScreen
                     TryStart("Texture quality with streaming", StartTextureQualityWithStreaming, StopTextureQualityWithStreaming);
                 if (Settings.Enabled.Value && markStreamable)
                     TryStart("Streamable texture patch", StartStreamingBundlePatch, StopStreamingBundlePatch);
+                TryStart("Streaming budget measurement", StartStreamingBudgetMeasurement, StopStreamingBudgetMeasurement);
                 if (researchEnabled)
                     TryStart("Hideout research", StartHideoutResearch, StopHideoutResearch);
                 Log.LogInfo(PluginInfo.Name + " " + PluginInfo.Version + " loaded." + migrated);
@@ -280,18 +281,65 @@ namespace FuckThisLoadingScreen
             catch (Exception error) { Logger.LogError("Hideout research stopped after an observer error: " + error); StopHideoutResearch(); }
             if (_policy != null && !_policy.IsLoading)
                 FlushReports();
-            if (Settings.DumpLoadedTextures.Value)
+            if (Settings.DumpRequested)
                 DumpTextures();
+            PumpStreamingBudgetMeasurement();
             try
             { StreamingBundlePatch.Active?.Sweep(Time.realtimeSinceStartupAsDouble * 1000); }
             catch (Exception error) { Logger.LogError("Streamable texture patch stream cleanup failed: " + error); }
         }
         private void DumpTextures()
         {
-            Settings.DumpLoadedTextures.Value = false;
+            Settings.DumpRequested = false;
             try
             { LogDebug(TextureInventory.Dump(ModPaths.Locate(ModPaths.Dumps, ModPaths.TextureInventoryFolder), UnityEngine.SceneManagement.SceneManager.GetActiveScene().name)); }
             catch (Exception error) { Logger.LogError("Texture inventory failed: " + error); }
+        }
+        private void StartStreamingBudgetMeasurement()
+        {
+            var game = StreamingBudgetGame.Bind(Find, new Guid(SupportedModuleId));
+            StreamingBudgetMeasurement.Active = new StreamingBudgetMeasurement(() => Time.realtimeSinceStartupAsDouble * 1000, game.InRaid,
+                () => QualitySettings.streamingMipmapsActive, game.TryRead, game.MapBudget, game.MapName);
+            LogDebug("Streaming budget measurement ready; press Measure streaming budget in a raid.");
+        }
+        private void StopStreamingBudgetMeasurement()
+        {
+            StreamingBudgetMeasurement.Active = null;
+            Settings.MeasureRequested = false;
+        }
+        private void PumpStreamingBudgetMeasurement()
+        {
+            StreamingBudgetMeasurement measurement = StreamingBudgetMeasurement.Active;
+            if (measurement == null)
+                return;
+            StreamingBudgetResult finished;
+            try
+            {
+                if (Settings.MeasureRequested)
+                {
+                    Settings.MeasureRequested = false;
+                    measurement.Start();
+                }
+                finished = measurement.Pump();
+            }
+            catch (Exception error)
+            {
+                Logger.LogError("Streaming budget measurement stopped after an error: " + error);
+                StopStreamingBudgetMeasurement();
+                return;
+            }
+            if (finished == null)
+                return;
+            try
+            {
+                string directory = ModPaths.Dir(ModPaths.Dumps, ModPaths.StreamingBudgetFolder);
+                string name = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + string.Join("_", finished.MapName.Split(Path.GetInvalidFileNameChars())) + ".txt";
+                string header = PluginInfo.Name + " " + PluginInfo.Version + " | EFT MVID=" + SupportedModuleId + " | " + SystemInfo.graphicsDeviceName +
+                    " | graphicsMemorySize=" + SystemInfo.graphicsMemorySize + " MiB | override=" + Settings.StreamingBudgetOverride.Value + " MiB";
+                File.WriteAllText(Path.Combine(directory, name), finished.Report(header));
+                LogDebug("Streaming budget measured: " + finished.Summary.Replace("\n", " | ") + " | file " + name);
+            }
+            catch (Exception error) { Logger.LogError("Streaming budget result export failed: " + error.Message); }
         }
         private void StartTextureQualityWithStreaming()
         {
@@ -393,6 +441,7 @@ namespace FuckThisLoadingScreen
             StopDecalArrayResync();
             StopTextureQualityWithStreaming();
             StopStreamingBundlePatch();
+            StopStreamingBudgetMeasurement();
             StopTextureWorkerFix();
             StopHideoutResearch();
             PolicyHooks.Policy = null;
@@ -451,7 +500,7 @@ namespace FuckThisLoadingScreen
         private void StartMipBudgetAccounting()
         {
             _mipBudgetHarmony = new Harmony(PluginInfo.Guid + ".mip-budget-accounting");
-            MipBudgetAccounting.Active = MipBudgetAccounting.Install(_mipBudgetHarmony, Find, new Guid(SupportedModuleId));
+            MipBudgetAccounting.Active = MipBudgetAccounting.Install(_mipBudgetHarmony, Find, new Guid(SupportedModuleId), () => Settings.StreamingBudgetOverride.Value);
             _mipBudgetPumpFailed = false;
             LogDebug("Mip budget accounting armed: selected streaming allowance + measured nonstreaming residency + one shared icon allowance. Native mip limits and camera bias retained; live mip-0 acceptance pending.");
         }

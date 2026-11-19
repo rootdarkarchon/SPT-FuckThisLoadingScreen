@@ -119,7 +119,22 @@ Reduces the fixed 500 ms initial batch waits in the bot profile loader to 1 ms.
 ### Mip budget accounting (`MipBudgetAccounting`)
 
 - `EFT.Settings.Graphics.GraphicsSettingsController`: static field `MipStreamingMemoryBudget`; `RefreshStreamingMemoryBudget(Vector4, int?)` postfix at `Priority.Last`.
-- Feature: Account For Nonstreaming Textures.
+- Features: Account For Nonstreaming Textures, Streaming Budget Override (`BaseBudget` stays EFT's selected value; `EffectiveBudget` is the override when it is above 0).
+
+### Streaming budget measurement (`StreamingBudgetGame`)
+
+No patches; every member is bound once at startup (EFT 0.16.9.40743) and read on the main thread.
+
+| Target | Member | Use |
+| --- | --- | --- |
+| `EFT.CameraControl.CameraManager` | static field `instance` (not the `Instance` property, which creates a manager when none exists) | The manager whose `_vramWrapper` is set by `SetCamera`; null means no sample |
+| `EFT.CameraControl.CameraManager` | `GetVRamUsage(out ulong totalVRam, out ulong localBudget, out ulong localCurrentUsage)` | DXGI VRAM query, bound as a closed delegate and rebuilt only when `instance` changes. Returns zeros when `_vramWrapper` is null, which the measurement treats as unavailable |
+| `EFT.InGameStatus` | static bool `InRaid` | Set in `TarkovApplication.GamePrepare`, cleared in `OnGameEnd`; also true while the raid loads |
+| `Comfort.Common.Singleton<EFT.GameWorld>` | static `Instantiated`, `Instance` | Together with `InRaid`: a raid with a live world |
+| `EFT.GameWorld` | `LocationId` (string) | Map name for the result; falls back to the active scene name when empty |
+| `EFT.Settings.Graphics.GraphicsSettingsController` | static float `MipStreamingMemoryBudget` | EFT's selected map budget when accounting is not active |
+
+Unity counters read per sample: `Texture.desiredTextureMemory`, `nonStreamingTextureMemory`, `currentTextureMemory`; `QualitySettings.streamingMipmapsActive`.
 
 ### Mip residency policy (`MipResidencyPolicy`)
 

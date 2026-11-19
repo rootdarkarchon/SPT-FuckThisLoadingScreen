@@ -1,4 +1,6 @@
+using System;
 using BepInEx.Configuration;
+using UnityEngine;
 
 namespace FuckThisLoadingScreen
 {
@@ -13,6 +15,9 @@ namespace FuckThisLoadingScreen
         private const string AudioCategory = "4. Audio";
         private const string MipStreamingCategory = "5. Mip Streaming";
         private const string DebugCategory = "9. Debug";
+
+        private const string MeasureInstructions = "Enable mip streaming in EFT graphics settings, load Streets (the heaviest map), press Measure and look and move around for 60 s, " +
+            "including aiming down scopes, then press Apply. Re-measure after changing resolution, upscaler or texture quality.";
 
         internal static ConfigEntry<bool> Enabled;
 
@@ -35,10 +40,20 @@ namespace FuckThisLoadingScreen
         internal static ConfigEntry<bool> ResyncDecalTextureArrays;
         internal static ConfigEntry<bool> ReleaseIconMipRequests;
         internal static ConfigEntry<bool> AccountForNonstreamingTextures;
+        internal static ConfigEntry<int> StreamingBudgetOverride;
+        internal static ConfigEntry<bool> MeasureStreamingBudget;
+        internal static ConfigEntry<bool> ApplyMeasuredBudget;
 
         internal static ConfigEntry<bool> DebugLogging;
         internal static ConfigEntry<bool> WriteLoadingReports;
         internal static ConfigEntry<bool> DumpLoadedTextures;
+
+        // Set by the "Dump now" button; consumed once by Plugin.Update on the main thread.
+        internal static bool DumpRequested;
+
+        // Set by the "Measure" button; consumed once by Plugin.Update on the main thread.
+        internal static bool MeasureRequested;
+        private static GUIStyle _noteStyle;
         internal static ConfigEntry<bool> WriteHideoutResearchReports;
         internal static ConfigEntry<bool> NonCollectingDiagnosticMeasurements;
         internal static ConfigEntry<bool> RetainUnusedStreamedMips;
@@ -118,6 +133,32 @@ namespace FuckThisLoadingScreen
                 Describe(MipStreamingCategory, "Account for nonstreaming textures", 70,
                     "Treat EFT's map/quality budget as the streamed-texture allowance and add the measured resident nonstreaming texture memory to Unity's " +
                     "total budget, refreshed every 500 ms. Requires Release icon mip requests. Restart required."));
+            ApplyTextureQualityWithStreaming = config.Bind("Mip Streaming", "Apply Texture Quality With Streaming", true,
+                Describe(MipStreamingCategory, "Apply texture quality with streaming", 60,
+                    "Keep EFT's texture-quality mipmap limit (Medium drops one mip, Low two) while mip streaming is on. EFT normally forces the limit to 0 " +
+                    "with streaming, so textures that cannot stream load at full size. No effect at High quality. Applied when EFT applies texture quality. " +
+                    "Restart required."));
+            MarkItemTexturesStreamable = config.Bind("Mip Streaming", "Mark Item Textures Streamable", true,
+                Describe(MipStreamingCategory, "Mark item textures streamable", 50,
+                    "While EFT loads its item and weapon bundles, present eligible textures (mipmapped, not CPU-readable, not already streaming) as " +
+                    "mip-streamable so they stream instead of loading at full size. Bundle files are read through a patching stream; nothing is written to disk " +
+                    "except a small offset index, built once in the background after install or a game update. Restart required."));
+            StreamingBudgetOverride = config.Bind("Mip Streaming", "Streaming Budget Override", 0,
+                Describe(MipStreamingCategory, "Streaming budget override", 40,
+                    "Upper limit in MiB for streamed textures on this GPU, applied on every map. Replaces EFT's per-map streaming budget, higher or lower; " +
+                    "0 keeps EFT's value. Measure on Streets so it fits the heaviest map, or use the two buttons below. " +
+                    "Requires Account For Nonstreaming Textures: without it this does nothing. Applies within 500 ms, no restart needed.",
+                    new AcceptableValueRange<int>(0, 65536)));
+            // Persisted keys of the two buttons; their values are unused.
+            MeasureStreamingBudget = config.Bind("Mip Streaming", "Measure Streaming Budget", false,
+                Describe(MipStreamingCategory, "Measure streaming budget", 30,
+                    MeasureInstructions + " Needs a raid with mip streaming on and the GPU video-memory query available. Samples every 250 ms for 60 s " +
+                    "and writes the result to BepInEx/config/FuckThisLoadingScreen/dumps/streaming-budget.",
+                    drawer: DrawMeasureButton));
+            ApplyMeasuredBudget = config.Bind("Mip Streaming", "Apply Measured Budget", false,
+                Describe(MipStreamingCategory, "Apply measured budget", 20,
+                    "Sets Streaming budget override to the recommendation of the last finished measurement. Needs a finished measurement.",
+                    drawer: DrawApplyButton));
 
             DebugLogging = config.Bind("Debug", "Logging", false,
                 Describe(DebugCategory, "Debug logging", 100,
@@ -127,11 +168,12 @@ namespace FuckThisLoadingScreen
                 Describe(DebugCategory, "Write loading reports", 90,
                     "Write per-load option/counter reports (TXT and CSV) to BepInEx/config/FuckThisLoadingScreen/captures/loading-reports. Applies on next raid.",
                     advanced: true));
+            // Persisted key kept from the former action toggle; the entry is drawn as a button and its value is unused.
             DumpLoadedTextures = config.Bind("Debug", "Dump Loaded Textures", false,
-                Describe(DebugCategory, "Dump loaded textures (action)", 80,
-                    "ACTION: set to true to write an inventory of every loaded texture (type, size, format, streaming state, mipmap limit, estimated memory) and a grouped " +
-                    "summary to BepInEx/config/FuckThisLoadingScreen/dumps/texture-inventory. Resets itself to false. Scans all textures once; expect a short hitch.",
-                    advanced: true));
+                Describe(DebugCategory, "Dump loaded textures", 80,
+                    "Writes an inventory of every loaded texture (type, size, format, streaming state, mipmap limit, estimated memory) and a grouped " +
+                    "summary to BepInEx/config/FuckThisLoadingScreen/dumps/texture-inventory. Scans all textures once; expect a short hitch.",
+                    advanced: true, drawer: DrawDumpButton));
             WriteHideoutResearchReports = config.Bind("Debug", "Write Hideout Research Reports", false,
                 Describe(DebugCategory, "Write hideout research reports", 70,
                     "Record hideout entry/preloads, scene progress, streaming counters, icon/decal mip probes and a background heartbeat to " +
@@ -149,22 +191,75 @@ namespace FuckThisLoadingScreen
                 Describe(DebugCategory, "Parallel scene loading (experimental)", 40,
                     "TEST ONLY: use native parallel scheduling within each preset, with as-ready activation so Unity's async queue can progress. Child presets keep " +
                     "native order. Changes activation ordering. Applies on next raid.", advanced: true));
-            ApplyTextureQualityWithStreaming = config.Bind("Mip Streaming", "Apply Texture Quality With Streaming", false,
-                Describe(DebugCategory, "Apply texture quality with streaming (experimental)", 30,
-                    "EXPERIMENTAL: keep EFT's texture-quality mipmap limit (Medium drops one mip, Low two) while mip streaming is on. EFT normally forces the limit to 0 " +
-                    "with streaming, so textures that cannot stream load at full size. Applied when EFT applies texture quality. Restart required.", advanced: true));
-            MarkItemTexturesStreamable = config.Bind("Mip Streaming", "Mark Item Textures Streamable", false,
-                Describe(DebugCategory, "Mark item textures streamable (experimental)", 20,
-                    "EXPERIMENTAL: while EFT loads its item and weapon bundles, present eligible textures (mipmapped, not CPU-readable, not already streaming) as " +
-                    "mip-streamable so they stream instead of loading at full size. Bundle files are read through a patching stream; nothing is written to disk. " +
-                    "Restart required.", advanced: true));
 
-            // Action toggle: never persists as true.
+            // A value left true by the former toggle must not linger in the .cfg.
             DumpLoadedTextures.Value = false;
         }
 
+        private static void DrawDumpButton(ConfigEntryBase entry)
+        {
+            if (GUILayout.Button("Dump loaded textures now", GUILayout.ExpandWidth(true)))
+                DumpRequested = true;
+        }
+
+        private static GUIStyle NoteStyle()
+        {
+            // GUI.skin is only valid inside OnGUI; the drawers are the only callers.
+            return _noteStyle ?? (_noteStyle = new GUIStyle(GUI.skin.label) { wordWrap = true });
+        }
+
+        private static void DrawMeasureButton(ConfigEntryBase entry)
+        {
+            StreamingBudgetMeasurement measurement = StreamingBudgetMeasurement.Active;
+            GUILayout.BeginVertical();
+            GUILayout.Label(MeasureInstructions, NoteStyle());
+            if (measurement == null)
+            {
+                GUILayout.Label("Unavailable: the plugin could not bind the EFT members it needs. See BepInEx/LogOutput.log.", NoteStyle());
+            }
+            else
+            {
+                bool enabled = GUI.enabled;
+                GUI.enabled = enabled && !measurement.Running;
+                if (GUILayout.Button(measurement.Running ? "Measuring..." : "Measure streaming budget (60 s)", GUILayout.ExpandWidth(true)))
+                    MeasureRequested = true;
+                GUI.enabled = enabled;
+                if (measurement.Running)
+                {
+                    GUILayout.Label(measurement.Progress, NoteStyle());
+                }
+                else
+                {
+                    if (measurement.Message != null)
+                        GUILayout.Label(measurement.Message, NoteStyle());
+                    if (measurement.Result != null)
+                        GUILayout.Label(measurement.Result.Summary, NoteStyle());
+                }
+            }
+
+            GUILayout.EndVertical();
+        }
+
+        private static void DrawApplyButton(ConfigEntryBase entry)
+        {
+            StreamingBudgetResult result = StreamingBudgetMeasurement.Active?.Result;
+            GUILayout.BeginVertical();
+            bool enabled = GUI.enabled;
+            GUI.enabled = enabled && result != null;
+            if (GUILayout.Button(result == null ? "Apply measured budget" : result.ApplyLabel, GUILayout.ExpandWidth(true)) && result != null)
+                StreamingBudgetOverride.Value = result.RecommendedMiB;
+            GUI.enabled = enabled;
+            if (result == null)
+                GUILayout.Label("No measurement yet: press Measure streaming budget first.", NoteStyle());
+            else if (StreamingBudgetOverride.Value == result.RecommendedMiB)
+                GUILayout.Label("Streaming budget override is set to this value.", NoteStyle());
+            if (MipBudgetAccounting.Active == null)
+                GUILayout.Label("Account For Nonstreaming Textures is not active, so the override does nothing until it is on (restart required).", NoteStyle());
+            GUILayout.EndVertical();
+        }
+
         private static ConfigDescription Describe(string category, string displayName, int order, string description,
-            AcceptableValueBase range = null, bool advanced = false)
+            AcceptableValueBase range = null, bool advanced = false, Action<ConfigEntryBase> drawer = null)
         {
             return new ConfigDescription(description, range, new ConfigurationManagerAttributes
             {
@@ -172,7 +267,10 @@ namespace FuckThisLoadingScreen
                 DispName = displayName,
                 Order = order,
                 Description = description,
-                IsAdvanced = advanced
+                IsAdvanced = advanced,
+                CustomDrawer = drawer,
+                HideDefaultButton = drawer != null,
+                HideSettingName = drawer != null
             });
         }
     }

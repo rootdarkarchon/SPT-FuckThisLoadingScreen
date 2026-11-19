@@ -38,8 +38,11 @@ internal static class PluginContractValidation
         ["Memory|Non-Collecting Diagnostic Measurements"] = "9. Debug",
         ["Experimental|Retain Unused Streamed Mips"] = "9. Debug",
         ["Experimental|Parallel Scene Loading"] = "9. Debug",
-        ["Mip Streaming|Apply Texture Quality With Streaming"] = "9. Debug",
-        ["Mip Streaming|Mark Item Textures Streamable"] = "9. Debug",
+        ["Mip Streaming|Apply Texture Quality With Streaming"] = "5. Mip Streaming",
+        ["Mip Streaming|Mark Item Textures Streamable"] = "5. Mip Streaming",
+        ["Mip Streaming|Streaming Budget Override"] = "5. Mip Streaming",
+        ["Mip Streaming|Measure Streaming Budget"] = "5. Mip Streaming",
+        ["Mip Streaming|Apply Measured Budget"] = "5. Mip Streaming",
     };
 
     internal static void Run(Action<bool, string> check, string project)
@@ -149,7 +152,38 @@ internal static class PluginContractValidation
         object logging = seen["Debug|Logging"];
         check(Equals(logging.GetType().GetProperty("DefaultValue").GetValue(logging, null), false), "Debug logging is off by default");
         object dump = seen["Debug|Dump Loaded Textures"];
-        check(Equals(dump.GetType().GetProperty("BoxedValue").GetValue(dump, null), false), "Dump Loaded Textures action starts false");
+        check(Equals(dump.GetType().GetProperty("BoxedValue").GetValue(dump, null), false), "Dump Loaded Textures persisted value is cleared");
+        object dumpTags = ConfigDescriptionTags(dump).Single();
+        check(dumpTags.GetType().GetField("CustomDrawer").GetValue(dumpTags) != null && (bool?)dumpTags.GetType().GetField("HideDefaultButton").GetValue(dumpTags) == true
+            && (bool?)dumpTags.GetType().GetField("HideSettingName").GetValue(dumpTags) == true, "Dump Loaded Textures is drawn as a button, not a checkbox");
+        object budgetOverride = seen["Mip Streaming|Streaming Budget Override"];
+        object overrideRange = budgetOverride.GetType().GetProperty("Description").GetValue(budgetOverride, null);
+        object overrideValues = overrideRange.GetType().GetProperty("AcceptableValues").GetValue(overrideRange, null);
+        check((int)budgetOverride.GetType().GetProperty("DefaultValue").GetValue(budgetOverride, null) == 0 && (int)overrideValues.GetType().GetProperty("MinValue").GetValue(overrideValues, null) == 0
+            && (int)overrideValues.GetType().GetProperty("MaxValue").GetValue(overrideValues, null) == 65536, "Streaming Budget Override defaults to 0 (EFT's value) within 0..65536");
+        check(((string)overrideRange.GetType().GetProperty("Description").GetValue(overrideRange, null)).Contains("Account For Nonstreaming Textures"), "Streaming Budget Override names its Account For Nonstreaming Textures requirement");
+        foreach (string button in new[] { "Mip Streaming|Measure Streaming Budget", "Mip Streaming|Apply Measured Budget" })
+        {
+            object buttonTags = ConfigDescriptionTags(seen[button]).Single();
+            check(buttonTags.GetType().GetField("CustomDrawer").GetValue(buttonTags) != null && (bool?)buttonTags.GetType().GetField("HideDefaultButton").GetValue(buttonTags) == true
+                && (bool?)buttonTags.GetType().GetField("HideSettingName").GetValue(buttonTags) == true && (bool?)buttonTags.GetType().GetField("IsAdvanced").GetValue(buttonTags) != true,
+                button + " is drawn as a button, not a checkbox, and is not advanced");
+        }
+
+        object measureDescription = seen["Mip Streaming|Measure Streaming Budget"].GetType().GetProperty("Description").GetValue(seen["Mip Streaming|Measure Streaming Budget"], null);
+        check(((string)measureDescription.GetType().GetProperty("Description").GetValue(measureDescription, null)).Contains("load Streets (the heaviest map), press Measure"), "Measure button description carries the instructions");
+        foreach (var pair in seen)
+        {
+            object entryDescription = pair.Value.GetType().GetProperty("Description").GetValue(pair.Value, null);
+            string text = (string)entryDescription.GetType().GetProperty("Description").GetValue(entryDescription, null);
+            check(text.IndexOf("resets itself", StringComparison.OrdinalIgnoreCase) < 0, pair.Key + " is not a self-resetting checkbox action");
+        }
+    }
+
+    private static object[] ConfigDescriptionTags(object entry)
+    {
+        object description = entry.GetType().GetProperty("Description").GetValue(entry, null);
+        return (object[])description.GetType().GetProperty("Tags").GetValue(description, null);
     }
 
     private static void Write(string path, string text)

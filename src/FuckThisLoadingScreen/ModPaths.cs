@@ -21,6 +21,7 @@ namespace FuckThisLoadingScreen
         internal const string LoadingReportsFolder = "loading-reports";
         internal const string HideoutResearchFolder = "hideout-research";
         internal const string TextureInventoryFolder = "texture-inventory";
+        internal const string StreamingBudgetFolder = "streaming-budget";
         internal const string StreamableTextureIndexFile = "StreamableTextureIndex.txt";
 
         internal static readonly string Root = Path.Combine(BepInEx.Paths.ConfigPath, PluginInfo.ModName);

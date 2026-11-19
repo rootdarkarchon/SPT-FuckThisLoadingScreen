@@ -36,7 +36,7 @@ public static class FTLSValidation
         string project = Directory.GetParent(UnityEngine.Application.dataPath).FullName;
         try
         {
-            TestPolicy(); TestHooks(); BotProfilePreloadDelayValidation.Run(Check); TestLootPriority(); TestFrameCap(); BoundedSceneValidation.Run(Check); TestSpawnZones(); TestSceneProbes(project); TextureWorkerTeardownValidation.Run(Check); MipStreamingValidation.Run(Check, project); TextureInventoryValidation.Run(Check, project); MipBudgetAccountingValidation.Run(Check); HideoutResearchValidation.Run(Check, project); PluginContractValidation.Run(Check, project); TestInstalled(Path.Combine(project, "install.txt"));
+            TestPolicy(); TestHooks(); BotProfilePreloadDelayValidation.Run(Check); TestLootPriority(); TestFrameCap(); BoundedSceneValidation.Run(Check); TestSpawnZones(); TestSceneProbes(project); TextureWorkerTeardownValidation.Run(Check); MipStreamingValidation.Run(Check, project); TextureInventoryValidation.Run(Check, project); MipBudgetAccountingValidation.Run(Check); StreamingBudgetValidation.Run(Check); HideoutResearchValidation.Run(Check, project); PluginContractValidation.Run(Check, project); TestInstalled(Path.Combine(project, "install.txt"));
             File.WriteAllText(Path.Combine(project, "result.txt"), $"PASS: {_checks} loading scope, task/scene scheduling, transpiler and installed-ABI checks. No live loading-speed acceptance claimed.\n");
             UnityEngine.Debug.Log($"PASS: {_checks} FTLS checks");
             EditorApplication.Exit(0);
@@ -499,6 +499,7 @@ public static class FTLSValidation
             TextureWorkerTeardownValidation.Installed(Check, find);
             MipStreamingValidation.Installed(Check, find);
             MipBudgetAccountingValidation.Installed(Check, find);
+            StreamingBudgetValidation.Installed(Check, find);
             IconMipProbeValidation.Installed(Check, find, Path.GetDirectoryName(installFile));
             DecalMipProbeValidation.Installed(Check, find, Path.GetDirectoryName(installFile));
             DecalTextureArrayResyncValidation.Installed(Check, find);

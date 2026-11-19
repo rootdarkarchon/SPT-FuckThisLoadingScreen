@@ -58,9 +58,12 @@ To uninstall, remove its plugin directory and restart the game.
 - **Mip streaming fixes:** decal result synchronization, icon mip lifetimes, mip
   budget accounting and decal texture-array resync. These are controlled by the
   **Mip Streaming** settings and need a restart after changes.
-- **Experimental (off by default):** Retain Unused Streamed Mips, Apply Texture
-  Quality With Streaming and Mark Item Textures Streamable. Details, measurements
-  and caveats are in [CHANGELOG.md](CHANGELOG.md).
+- **Texture memory with mip streaming (on by default):** Apply Texture Quality With
+  Streaming keeps Medium/Low texture quality effective, and Mark Item Textures
+  Streamable lets item and weapon textures stream. The second builds a small offset
+  index in the background once after install or a game update.
+- **Experimental (off by default):** Retain Unused Streamed Mips. Details,
+  measurements and caveats are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Defaults and comparisons
 
@@ -83,8 +86,11 @@ Experimental options are off by default. Settings are grouped into numbered BepI
 | Mip Streaming / Resync Decal Texture Arrays | true | false at startup retains native array copies; restart required |
 | Mip Streaming / Release Icon Mip Requests | true | false at startup retains native icon lifetimes; restart required |
 | Mip Streaming / Account For Nonstreaming Textures | true | false retains the previous budget; requires icon lifetimes; restart required |
-| Mip Streaming / Apply Texture Quality With Streaming | false | experimental: keep the texture-quality mipmap limit with streaming on; restart required |
-| Mip Streaming / Mark Item Textures Streamable | false | experimental: patch item/weapon bundle textures to mip-stream while loading; restart required |
+| Mip Streaming / Apply Texture Quality With Streaming | true | false retains EFT's limit 0 with streaming on; restart required |
+| Mip Streaming / Mark Item Textures Streamable | true | false loads item/weapon bundles natively; restart required |
+| Mip Streaming / Streaming Budget Override | 0 | MiB. 0 keeps EFT's per-map budget; above 0 replaces it (higher or lower) on every map; needs Account For Nonstreaming Textures; applies within 500 ms |
+| Mip Streaming / Measure Streaming Budget | button | "Measure streaming budget (60 s)" samples this GPU in a raid and shows a recommendation in the menu |
+| Mip Streaming / Apply Measured Budget | button | Sets Streaming Budget Override to the last recommendation |
 | Experimental / Retain Unused Streamed Mips | false | true enables the unmeasured caching candidate; restart required |
 | Scenes / Bounded As-Ready Scene Activation | true | false retains native scheduling when parallel mode is off |
 | Scenes / Scene In-Flight Limit | 2 | Range: 1–4 |
@@ -94,7 +100,7 @@ Experimental options are off by default. Settings are grouped into numbered BepI
 | Experimental / Parallel Scene Loading | false | Optional unbounded scheduling comparison |
 | Debug / Write Loading Reports | false | true enables per-load report files; summary lines go to the log under Debug / Logging |
 | Debug / Write Hideout Research Reports | false | true enables hideout/mip diagnostics; restart required |
-| Debug / Dump Loaded Textures | false | action: true writes one texture inventory to `BepInEx/config/FuckThisLoadingScreen/dumps/texture-inventory/`, then resets |
+| Debug / Dump Loaded Textures | button | "Dump loaded textures now" writes one texture inventory to `BepInEx/config/FuckThisLoadingScreen/dumps/texture-inventory/` |
 | Debug / Logging | false | true adds `[debug]` log lines; the initialisation line and warnings/errors are always written |
 
 Bounded activation takes precedence over the experimental parallel toggle.
@@ -109,6 +115,41 @@ and the residency experiment also read **General / Enabled** at startup. Restart
 after changing their options or the master switch for these patches. Icon hooks
 stay installed until pending render Tasks finish during plugin cleanup, so
 ownership is not interrupted.
+
+## Streaming budget
+
+EFT picks the mip-streaming texture budget from a per-map table and never looks at
+the GPU. **Streaming Budget Override** replaces it with one value for your GPU on
+every map. Unity's budget is an upper limit, not a reservation, and EFT discards
+unused mips, so a higher budget costs nothing until textures need it. The override
+requires **Account For Nonstreaming Textures** (restart after enabling it).
+
+1. Enable mip streaming in EFT's graphics settings.
+2. Load Streets, the heaviest map.
+3. Open the Configuration Manager (F12), press **Measure streaming budget**, and look
+   and move around for 60 s, including aiming down scopes. The result appears under
+   the button; no log reading is needed.
+4. Press **Apply measured budget**. It sets the override to the recommendation, which
+   takes effect within 500 ms.
+
+Re-measure after changing resolution, upscaler or texture quality. Measuring
+needs a raid, mip streaming on and EFT's video-memory query; otherwise the button
+reports why. A raid that ends mid-measurement cancels it.
+
+The recommendation is the VRAM EFT reports as available to the game, minus the memory
+used by everything that is not a texture, minus resident nonstreaming textures and a
+safety margin (the larger of 512 MiB and 10 %), rounded down to 64 MiB and limited to
+256-65536 MiB. The verdict compares it with EFT's map budget and the peak streamed
+texture demand:
+
+- **EFT's budget exceeds what this GPU can hold:** applying lowers it and avoids VRAM
+  paging stutter.
+- **Textures were budget-limited:** applying raises it, giving sharper textures.
+- **Budget never limited textures here:** applying raises the ceiling for heavier
+  scenes; no visible change is expected now.
+
+Each measurement is also written to
+`BepInEx/config/FuckThisLoadingScreen/dumps/streaming-budget/`.
 
 ## Reports and data
 
@@ -141,6 +182,7 @@ Runtime files go under `BepInEx/config/FuckThisLoadingScreen/`:
 | Loading reports (TXT, CSV) | `captures/loading-reports/` |
 | Hideout research | `captures/hideout-research/` |
 | Texture inventory | `dumps/texture-inventory/` |
+| Streaming budget measurements | `dumps/streaming-budget/` |
 | Streamable texture index | `cache/StreamableTextureIndex.txt` |
 
 On first start, existing files in the old `BepInEx/FuckThisLoadingScreen/` folder

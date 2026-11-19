@@ -22,6 +22,7 @@
     <Reference Include="Comfort.Unity"><HintPath>$(SptInstallPath)/EscapeFromTarkov_Data/Managed/Comfort.Unity.dll</HintPath></Reference>
     <Reference Include="UnityEngine"><HintPath>$(SptInstallPath)/EscapeFromTarkov_Data/Managed/UnityEngine.dll</HintPath></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(SptInstallPath)/EscapeFromTarkov_Data/Managed/UnityEngine.CoreModule.dll</HintPath></Reference>
+    <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(SptInstallPath)/EscapeFromTarkov_Data/Managed/UnityEngine.IMGUIModule.dll</HintPath></Reference>
     <Reference Include="UnityEngine.AssetBundleModule"><HintPath>$(SptInstallPath)/EscapeFromTarkov_Data/Managed/UnityEngine.AssetBundleModule.dll</HintPath></Reference>
     <Reference Include="UnityEngine.StreamingModule"><HintPath>$(SptInstallPath)/EscapeFromTarkov_Data/Managed/UnityEngine.StreamingModule.dll</HintPath></Reference>
   </ItemGroup>
