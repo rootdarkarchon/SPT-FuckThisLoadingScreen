@@ -34,14 +34,15 @@ namespace FuckThisLoadingScreen
 
         internal StreamingBundlePatch(string sourceRoot, IEnumerable<string> folders, string indexPath, Action<string> log, Action<string> warning = null)
         {
-            this._sourceRoot = Normalize(sourceRoot) + "/";
-            this._folders = new List<string>(folders).ToArray();
+            _sourceRoot = Normalize(sourceRoot) + "/";
+            _folders = new List<string>(folders).ToArray();
             var list = new List<string>();
-            foreach (string folder in this._folders) list.Add(Normalize(Path.Combine(sourceRoot, folder)) + "/");
+            foreach (string folder in _folders)
+                list.Add(Normalize(Path.Combine(sourceRoot, folder)) + "/");
             _roots = list.ToArray();
-            this._indexPath = indexPath;
-            this._log = log;
-            this._warning = warning ?? log;
+            _indexPath = indexPath;
+            _log = log;
+            _warning = warning ?? log;
         }
 
         internal static string Normalize(string path) => Path.GetFullPath(path).Replace('\\', '/').ToLowerInvariant();
@@ -52,18 +53,21 @@ namespace FuckThisLoadingScreen
         internal static void Install(Harmony harmony)
         {
             var load = AccessTools.Method(typeof(AssetBundle), nameof(AssetBundle.LoadFromFileAsync), new[] { typeof(string) });
-            if (load?.GetMethodBody() == null) throw new MissingMethodException("AssetBundle.LoadFromFileAsync(string) is unavailable");
+            if (load?.GetMethodBody() == null)
+                throw new MissingMethodException("AssetBundle.LoadFromFileAsync(string) is unavailable");
             // Last: another mod (Rupture) may already substitute this load; then the original does not run.
             harmony.Patch(load, prefix: new HarmonyMethod(typeof(StreamingBundlePatch), nameof(Prefix)) { priority = Priority.Last });
         }
 
         internal static bool Prefix(string __0, ref AssetBundleCreateRequest __result, bool __runOriginal)
         {
-            if (!__runOriginal || __0 == null || Active == null) return true;
+            if (!__runOriginal || __0 == null || Active == null)
+                return true;
             try
             {
                 var request = Active.Load(__0);
-                if (request == null) return true;
+                if (request == null)
+                    return true;
                 __result = request;
                 return false;
             }
@@ -79,16 +83,21 @@ namespace FuckThisLoadingScreen
         internal AssetBundleCreateRequest Load(string path)
         {
             string key = Key(path);
-            if (key == null) return null;
+            if (key == null)
+                return null;
             long[] flags = Indexed(key, new FileInfo(path));
-            if (flags == null) { Native++; return null; }
-            if (flags.Length == 0) return null;
+            if (flags == null)
+            { Native++; return null; }
+            if (flags.Length == 0)
+                return null;
             var stream = new FlagPatchStream(path, flags);
             AssetBundleCreateRequest request;
-            try { request = AssetBundle.LoadFromStreamAsync(stream); }
+            try
+            { request = AssetBundle.LoadFromStreamAsync(stream); }
             catch { stream.Dispose(); throw; }
             _open.Add(new Open { Request = request, Stream = stream });
-            Bundles++; Textures += flags.Length;
+            Bundles++;
+            Textures += flags.Length;
             if (Bundles == 1 || Bundles % 100 == 0)
                 _log?.Invoke("Streamable texture patch: bundles=" + Bundles + ", textures=" + Textures + ", not indexed yet (native)=" + Native + ", open streams=" + _open.Count + ", skipped=" + Failures + ".");
             return request;
@@ -101,7 +110,8 @@ namespace FuckThisLoadingScreen
         {
             string normalized = Normalize(path);
             foreach (string root in _roots)
-                if (normalized.StartsWith(root, StringComparison.Ordinal)) return normalized.Substring(_sourceRoot.Length);
+                if (normalized.StartsWith(root, StringComparison.Ordinal))
+                    return normalized.Substring(_sourceRoot.Length);
             return null;
         }
 
@@ -110,22 +120,28 @@ namespace FuckThisLoadingScreen
         {
             while (_messages.TryDequeue(out var message))
             {
-                if (message.IsWarning) _warning?.Invoke(message.Text);
-                else _log?.Invoke(message.Text);
+                if (message.IsWarning)
+                    _warning?.Invoke(message.Text);
+                else
+                    _log?.Invoke(message.Text);
             }
-            if (_open.Count == 0 || now < _nextSweep) return;
+            if (_open.Count == 0 || now < _nextSweep)
+                return;
             _nextSweep = now + 1000;
             for (int i = _open.Count - 1; i >= 0; i--)
             {
                 var entry = _open[i];
                 if (entry.Bundle == null)
                 {
-                    if (!entry.Request.isDone) continue;
+                    if (!entry.Request.isDone)
+                        continue;
                     entry.Bundle = entry.Request.assetBundle;
                     // A failed load never had a bundle object; an unloaded one compares equal to null.
-                    if (!ReferenceEquals(entry.Bundle, null) && entry.Bundle) continue;
+                    if (!ReferenceEquals(entry.Bundle, null) && entry.Bundle)
+                        continue;
                 }
-                else if (entry.Bundle) continue;
+                else if (entry.Bundle)
+                    continue;
                 entry.Stream.Dispose();
                 _open.RemoveAt(i);
             }
@@ -136,7 +152,8 @@ namespace FuckThisLoadingScreen
             _indexing?.Cancel();
             // Bundles still loaded keep reading their stream; leave those open for the process lifetime.
             for (int i = _open.Count - 1; i >= 0; i--)
-                if (_open[i].Request.isDone && !_open[i].Request.assetBundle) { _open[i].Stream.Dispose(); _open.RemoveAt(i); }
+                if (_open[i].Request.isDone && !_open[i].Request.assetBundle)
+                { _open[i].Stream.Dispose(); _open.RemoveAt(i); }
         }
 
         #endregion
@@ -163,7 +180,8 @@ namespace FuckThisLoadingScreen
                     foreach (string folder in _folders)
                     {
                         string directory = Path.Combine(_sourceRoot, folder);
-                        if (Directory.Exists(directory)) files.AddRange(Directory.EnumerateFiles(directory, "*.bundle", SearchOption.AllDirectories));
+                        if (Directory.Exists(directory))
+                            files.AddRange(Directory.EnumerateFiles(directory, "*.bundle", SearchOption.AllDirectories));
                     }
                     var pending = files.FindAll(path => { string key = Key(path); return key != null && Indexed(key, new FileInfo(path)) == null; });
                     int workers = ScanWorkers;
@@ -173,22 +191,30 @@ namespace FuckThisLoadingScreen
                     double nextReport = 10;
                     int scanned = IndexFiles(pending, cancellation.Token, out int failed, done =>
                     {
-                        if (timer.Elapsed.TotalSeconds < nextReport) return;
+                        if (timer.Elapsed.TotalSeconds < nextReport)
+                            return;
                         nextReport = timer.Elapsed.TotalSeconds + 10;
                         _messages.Enqueue(("Streamable texture index: " + done + "/" + pending.Count + " scanned (" + (100 * done / pending.Count) + "%, " + timer.Elapsed.TotalSeconds.ToString("0") + " s).", false));
                     }, workers);
                     // Saved even when cancelled, so a partial scan is not repeated.
-                    if (scanned > 0) SaveIndex();
-                    if (cancellation.IsCancellationRequested) return;
+                    if (scanned > 0)
+                        SaveIndex();
+                    if (cancellation.IsCancellationRequested)
+                        return;
                     int eligible = 0, textures = 0;
-                    lock (_gate) foreach (var entry in _offsets.Values) if (entry.Offsets.Length > 0) { eligible++; textures += entry.Offsets.Length; }
+                    lock (_gate)
+                    foreach (var entry in _offsets.Values)
+                    if (entry.Offsets.Length > 0)
+                    { eligible++; textures += entry.Offsets.Length; }
                     _messages.Enqueue(("Streamable texture index ready in " + timer.Elapsed.TotalSeconds.ToString("0.0") + " s: " + files.Count + " bundles (" + loaded + " from saved index, " +
                         scanned + " scanned, " + failed + " unreadable); " + eligible + " bundles with " + textures + " eligible textures.", false));
                 }
                 catch (Exception error)
                 {
                     _messages.Enqueue(("Streamable texture index failed; unindexed bundles load natively: " + error, true));
-                    try { SaveIndex(); } catch { }
+                    try
+                    { SaveIndex(); }
+                    catch { }
                 }
             });
         }
@@ -215,11 +241,14 @@ namespace FuckThisLoadingScreen
                     while (!token.IsCancellationRequested && (at = System.Threading.Interlocked.Increment(ref next)) < files.Count)
                     {
                         string path = files[at], key = Key(path);
-                        if (key == null) continue;
+                        if (key == null)
+                            continue;
                         var info = new FileInfo(path);
-                        if (Indexed(key, info) != null) continue;
+                        if (Indexed(key, info) != null)
+                            continue;
                         long[] found;
-                        try { found = FindFlagOffsets(manager, path); }
+                        try
+                        { found = FindFlagOffsets(manager, path); }
                         catch { found = Array.Empty<long>(); System.Threading.Interlocked.Increment(ref failures); }
                         finally { manager.UnloadAll(); }
                         lock (_gate)
@@ -241,28 +270,37 @@ namespace FuckThisLoadingScreen
                 threads.Add(thread);
             }
             Work();
-            foreach (var thread in threads) thread.Join();
+            foreach (var thread in threads)
+                thread.Join();
             failed = failures;
-            if (fault != null) throw new AggregateException("Streamable texture index worker failed", fault);
+            if (fault != null)
+                throw new AggregateException("Streamable texture index worker failed", fault);
             return scanned;
         }
 
         // One line per bundle: relative path|length|ticks|offset,offset,...
         internal int LoadIndex()
         {
-            if (_indexPath == null || !File.Exists(_indexPath)) return 0;
+            if (_indexPath == null || !File.Exists(_indexPath))
+                return 0;
             int count = 0;
             foreach (string line in File.ReadLines(_indexPath))
             {
                 string[] parts = line.Split('|');
-                if (parts.Length != 4 || !long.TryParse(parts[1], out long length) || !long.TryParse(parts[2], out long ticks)) continue;
+                if (parts.Length != 4 || !long.TryParse(parts[1], out long length) || !long.TryParse(parts[2], out long ticks))
+                    continue;
                 var found = new List<long>();
                 bool valid = true;
                 foreach (string text in parts[3].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
-                    if (long.TryParse(text, out long offset)) found.Add(offset); else valid = false;
-                if (!valid) continue;
+                    if (long.TryParse(text, out long offset))
+                        found.Add(offset);
+                    else
+                        valid = false;
+                if (!valid)
+                    continue;
                 found.Sort();
-                lock (_gate) _offsets[parts[0]] = new Entry { Length = length, Ticks = ticks, Offsets = found.ToArray() };
+                lock (_gate)
+                    _offsets[parts[0]] = new Entry { Length = length, Ticks = ticks, Offsets = found.ToArray() };
                 count++;
             }
             return count;
@@ -270,7 +308,8 @@ namespace FuckThisLoadingScreen
 
         internal void SaveIndex()
         {
-            if (_indexPath == null) return;
+            if (_indexPath == null)
+                return;
             var lines = new List<string>();
             lock (_gate)
                 foreach (var pair in _offsets)
@@ -279,7 +318,8 @@ namespace FuckThisLoadingScreen
             Directory.CreateDirectory(Path.GetDirectoryName(_indexPath));
             string temporary = _indexPath + ".tmp";
             File.WriteAllLines(temporary, lines);
-            if (File.Exists(_indexPath)) File.Delete(_indexPath);
+            if (File.Exists(_indexPath))
+                File.Delete(_indexPath);
             File.Move(temporary, _indexPath);
         }
 
@@ -291,14 +331,16 @@ namespace FuckThisLoadingScreen
         internal static long[] FindFlagOffsets(AssetsManager manager, string path)
         {
             var bundle = manager.LoadBundleFile(path, false);
-            if (bundle.file.DataIsCompressed) return Array.Empty<long>();
+            if (bundle.file.DataIsCompressed)
+                return Array.Empty<long>();
             long dataStart = bundle.file.Header.GetFileDataOffset();
             var result = new List<long>();
             var directories = bundle.file.BlockAndDirInfo.DirectoryInfos;
             for (int index = 0; index < directories.Count; index++)
             {
                 // UnityFS directory flag 4 marks a serialized assets file (not a .resS stream).
-                if ((directories[index].Flags & 4) == 0) continue;
+                if ((directories[index].Flags & 4) == 0)
+                    continue;
                 var file = manager.LoadAssetsFileFromBundle(bundle, index, false);
                 var reader = file.file.Reader;
                 foreach (var texture in file.file.GetAssetsOfType(AssetClassID.Texture2D))
@@ -311,20 +353,35 @@ namespace FuckThisLoadingScreen
                     long external = 0;
                     foreach (var child in template.Children)
                     {
-                        if (child.Name == "m_StreamingMipmaps") flag = reader.Position;
+                        if (child.Name == "m_StreamingMipmaps")
+                            flag = reader.Position;
                         var value = child.MakeValue(reader);
                         switch (child.Name)
                         {
-                            case "m_MipCount": mips = value.AsInt; break;
-                            case "m_IsReadable": readable = value.AsBool; break;
-                            case "m_IgnoreMipmapLimit": ignore = value.AsBool; break;
-                            case "m_StreamingMipmaps": streaming = value.AsBool; break;
-                            case "m_TextureDimension": dimension = value.AsInt; break;
-                            case "m_StreamData": external = value["size"].AsLong; break;
+                            case "m_MipCount":
+                                mips = value.AsInt;
+                                break;
+                            case "m_IsReadable":
+                                readable = value.AsBool;
+                                break;
+                            case "m_IgnoreMipmapLimit":
+                                ignore = value.AsBool;
+                                break;
+                            case "m_StreamingMipmaps":
+                                streaming = value.AsBool;
+                                break;
+                            case "m_TextureDimension":
+                                dimension = value.AsInt;
+                                break;
+                            case "m_StreamData":
+                                external = value["size"].AsLong;
+                                break;
                         }
-                        if (child.Name == "m_StreamData") break;
+                        if (child.Name == "m_StreamData")
+                            break;
                     }
-                    if (flag < 0 || streaming || readable || ignore || mips <= 1 || dimension != 2 || external <= 0) continue;
+                    if (flag < 0 || streaming || readable || ignore || mips <= 1 || dimension != 2 || external <= 0)
+                        continue;
                     result.Add(dataStart + directories[index].Offset + flag);
                 }
             }
@@ -349,7 +406,7 @@ namespace FuckThisLoadingScreen
             internal FlagPatchStream(string path, long[] flags)
             {
                 _file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.RandomAccess);
-                this._flags = flags;
+                _flags = flags;
             }
 
             public override int Read(byte[] buffer, int offset, int count)
@@ -362,11 +419,13 @@ namespace FuckThisLoadingScreen
                     {
                         long end = _position + read;
                         int first = Array.BinarySearch(_flags, _position);
-                        if (first < 0) first = ~first;
+                        if (first < 0)
+                            first = ~first;
                         for (int i = first; i < _flags.Length && _flags[i] < end; i++)
                         {
                             int at = offset + (int)(_flags[i] - _position);
-                            if (buffer[at] == 0) buffer[at] = 1;
+                            if (buffer[at] == 0)
+                                buffer[at] = 1;
                         }
                         _position = end;
                     }
@@ -379,7 +438,8 @@ namespace FuckThisLoadingScreen
                 lock (_gate)
                 {
                     long target = origin == SeekOrigin.Begin ? offset : origin == SeekOrigin.Current ? _position + offset : _file.Length + offset;
-                    if (target < 0) throw new IOException("seek before start of bundle");
+                    if (target < 0)
+                        throw new IOException("seek before start of bundle");
                     return _position = target;
                 }
             }
@@ -394,7 +454,9 @@ namespace FuckThisLoadingScreen
             public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
             protected override void Dispose(bool disposing)
             {
-                if (disposing) lock (_gate) _file.Dispose();
+                if (disposing)
+                lock (_gate)
+                    _file.Dispose();
                 base.Dispose(disposing);
             }
         }

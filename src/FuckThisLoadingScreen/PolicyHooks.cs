@@ -33,8 +33,10 @@ namespace FuckThisLoadingScreen
         internal static void RootPostfix(Task __result, LoadingRun __state)
         {
             LoadingPolicy owner = Policy;
-            if (owner == null || __state == null) return;
-            if (__result == null) { owner.RootFinished(__state, true); return; }
+            if (owner == null || __state == null)
+                return;
+            if (__result == null)
+            { owner.RootFinished(__state, true); return; }
             __result.ContinueWith(task => owner.RootFinished(__state, task.IsCanceled || task.IsFaulted),
                 CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
@@ -45,8 +47,10 @@ namespace FuckThisLoadingScreen
         internal static void MapPostfix(Task __result, MapScope __state)
         {
             LoadingPolicy owner = Policy;
-            if (owner == null || __state == null) return;
-            if (__result == null) { owner.LeaveMap(__state); return; }
+            if (owner == null || __state == null)
+                return;
+            if (__result == null)
+            { owner.LeaveMap(__state); return; }
             __result.ContinueWith(task => owner.LeaveMap(__state), CancellationToken.None,
                 TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
@@ -57,7 +61,8 @@ namespace FuckThisLoadingScreen
         internal static void LootLaunchPrefix(out LootLaunchScope __state)
         {
             __state = null;
-            if (Policy?.LootBundlePriority == true) { LootLaunchDepth++; __state = new LootLaunchScope(); }
+            if (Policy?.LootBundlePriority == true)
+            { LootLaunchDepth++; __state = new LootLaunchScope(); }
         }
         internal static void LootLaunchPostfix(LootLaunchScope __state) => __state?.Close();
         internal static void LootLaunchFinalizer(Exception __exception, LootLaunchScope __state)
@@ -67,8 +72,10 @@ namespace FuckThisLoadingScreen
         internal static void LootBundlesPostfix(Task __result, BundleScope __state)
         {
             LoadingPolicy owner = Policy;
-            if (owner == null || __state == null) return;
-            if (__result == null) { owner.LeaveLootBundles(__state); return; }
+            if (owner == null || __state == null)
+                return;
+            if (__result == null)
+            { owner.LeaveLootBundles(__state); return; }
             __result.ContinueWith(task => owner.LeaveLootBundles(__state), CancellationToken.None,
                 TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
@@ -89,7 +96,8 @@ namespace FuckThisLoadingScreen
                     code[i].operand = AccessTools.Method(typeof(PolicyHooks), nameof(EffectiveAudioBatchSize));
                     count++;
                 }
-            if (count != 1) throw new InvalidOperationException("Audio batch ABI mismatch; expected one modulo-300 divisor.");
+            if (count != 1)
+                throw new InvalidOperationException("Audio batch ABI mismatch; expected one modulo-300 divisor.");
             return code;
         }
         internal static float MeasureMemory()
@@ -114,19 +122,23 @@ namespace FuckThisLoadingScreen
                     instruction.operand = AccessTools.Method(typeof(PolicyHooks), nameof(MeasureMemory));
                     count++;
                 }
-            if (count != 2) throw new InvalidOperationException("Cleanup ABI mismatch; expected two diagnostic memory calls.");
+            if (count != 2)
+                throw new InvalidOperationException("Cleanup ABI mismatch; expected two diagnostic memory calls.");
             return code;
         }
 
         internal static void PresetPrefix(ref bool loadInParallelMode, bool allowSceneActivation = true)
         {
-            if (allowSceneActivation && Policy?.BoundedSceneRun != null) loadInParallelMode = false;
-            else if (Policy?.ParallelScenes == true) loadInParallelMode = true;
+            if (allowSceneActivation && Policy?.BoundedSceneRun != null)
+                loadInParallelMode = false;
+            else if (Policy?.ParallelScenes == true)
+                loadInParallelMode = true;
         }
         internal static void SchedulingPrefix(out SchedulingScope __state)
         {
             __state = null;
-            if (Policy?.ParallelScenes == true) { ParallelSchedulingDepth++; __state = new SchedulingScope(); }
+            if (Policy?.ParallelScenes == true)
+            { ParallelSchedulingDepth++; __state = new SchedulingScope(); }
         }
         internal static void SchedulingPostfix(SchedulingScope __state) => __state?.Close();
         internal static void SchedulingFinalizer(Exception __exception, SchedulingScope __state)
@@ -136,7 +148,8 @@ namespace FuckThisLoadingScreen
             // Native ParallelLoadCoroutine queues all additional scenes before awaiting any.
             // Holding those scenes at 0.9 would stall Unity's queue. Opt-in parallel mode
             // therefore activates those queued scenes as ready; ordinary loads keep native flags.
-            if (ParallelSchedulingDepth > 0 && Policy?.ParallelScenes == true) allowSceneActivation = true;
+            if (ParallelSchedulingDepth > 0 && Policy?.ParallelScenes == true)
+                allowSceneActivation = true;
         }
     }
 }

@@ -23,13 +23,14 @@ namespace FuckThisLoadingScreen
         internal int PendingCount => _pending.Count;
 
         private DecalTextureArrayResync(FieldInfo materials, MethodInfo create, Func<Texture2D, int> loadedMip, Action<Texture2D, Texture2DArray, int> copy, Action<string> log)
-        { this._materials = materials; Create = create; this._loadedMip = loadedMip; this._copy = copy; this._log = log; }
+        { _materials = materials; Create = create; _loadedMip = loadedMip; _copy = copy; _log = log; }
 
         internal static DecalTextureArrayResync Install(Harmony harmony, Func<string, Type> find, Guid module, Action<string> log,
             Func<Texture2D, int> loadedMip = null, Action<Texture2D, Texture2DArray, int> copy = null)
         {
             Type draw = find("StaticDeferredDecalDrawInstance");
-            if (draw.Module.ModuleVersionId != module) throw new NotSupportedException("Decal texture-array resync requires the supported EFT module");
+            if (draw.Module.ModuleVersionId != module)
+                throw new NotSupportedException("Decal texture-array resync requires the supported EFT module");
             FieldInfo materials = AccessTools.Field(draw, "_materials");
             if (materials == null || materials.IsStatic || materials.FieldType != typeof(SortedList<int, Material>))
                 throw new MissingFieldException(draw.FullName, "_materials (SortedList<int, Material>)");
@@ -43,14 +44,17 @@ namespace FuckThisLoadingScreen
         }
         internal static void Postfix(object __instance, ref Texture2DArray __0, int __4)
         {
-            try { Active?.Created(__instance, __0, __4); }
+            try
+            { Active?.Created(__instance, __0, __4); }
             catch (Exception error) { Active?.Log("Decal texture-array resync skipped one array build: " + error.GetType().Name + ": " + error.Message); }
         }
         internal void Created(object instance, Texture2DArray array, int textureId)
         {
-            if (!array || !QualitySettings.streamingMipmapsActive) return;
+            if (!array || !QualitySettings.streamingMipmapsActive)
+                return;
             var list = (SortedList<int, Material>)_materials.GetValue(instance);
-            if (list == null) return;
+            if (list == null)
+                return;
             // Native slice order: one slice per material in key order, including materials without this texture.
             int slice = 0;
             foreach (Material material in list.Values)
@@ -77,36 +81,44 @@ namespace FuckThisLoadingScreen
                 if (!entry.Array || !entry.Texture)
                 {
                     // Native rebuilt or released the array, or the source was unloaded.
-                    _pending.RemoveAt(i); Release(entry.Texture);
+                    _pending.RemoveAt(i);
+                    Release(entry.Texture);
                     continue;
                 }
                 if (_loadedMip(entry.Texture) != 0)
                 {
                     // The native texture quad tree also writes this request; keep mip 0 until the copy is complete.
-                    if (entry.Texture.requestedMipmapLevel != 0) entry.Texture.requestedMipmapLevel = 0;
+                    if (entry.Texture.requestedMipmapLevel != 0)
+                        entry.Texture.requestedMipmapLevel = 0;
                     continue;
                 }
                 _copy(entry.Texture, entry.Array, entry.Slice);
-                _pending.RemoveAt(i); Release(entry.Texture);
+                _pending.RemoveAt(i);
+                Release(entry.Texture);
                 Report("decals.texture-array.resynced", "Decal texture-array slice recopied at mip 0: texture=" + entry.Texture.name + "; slice=" + entry.Slice +
                     "; loaded_mip_at_build=" + entry.LoadedAtCopy + "; frames_waited=" + (Time.frameCount - entry.Frame) + ".");
             }
         }
         internal void Stop()
         {
-            for (int i = _pending.Count - 1; i >= 0; i--) { Texture2D texture = _pending[i].Texture; _pending.RemoveAt(i); Release(texture); }
+            for (int i = _pending.Count - 1; i >= 0; i--)
+            { Texture2D texture = _pending[i].Texture; _pending.RemoveAt(i); Release(texture); }
         }
         // Return the source to native/camera-driven streaming once no slice waits for it.
         private void Release(Texture2D texture)
         {
-            if (!texture) return;
-            for (int i = 0; i < _pending.Count; i++) if (ReferenceEquals(_pending[i].Texture, texture)) return;
+            if (!texture)
+                return;
+            for (int i = 0; i < _pending.Count; i++)
+            if (ReferenceEquals(_pending[i].Texture, texture))
+                return;
             texture.ClearRequestedMipmapLevel();
         }
         // Same branches as StaticDeferredDecalDrawInstance.CreateTextureArray/CopyMipsManual.
         internal static void NativeCopy(Texture2D texture, Texture2DArray array, int slice)
         {
-            if (QualitySettings.globalTextureMipmapLimit == 0 && texture.mipmapCount == array.mipmapCount) { Graphics.CopyTexture(texture, 0, array, slice); return; }
+            if (QualitySettings.globalTextureMipmapLimit == 0 && texture.mipmapCount == array.mipmapCount)
+            { Graphics.CopyTexture(texture, 0, array, slice); return; }
             int mips = Math.Min(texture.mipmapCount, array.mipmapCount);
             for (int mip = 0; mip < mips; mip++)
                 Graphics.CopyTexture(texture, 0, mip, 0, 0, texture.width >> mip, texture.height >> mip, array, slice, mip, 0, 0);
@@ -114,7 +126,9 @@ namespace FuckThisLoadingScreen
         private void Report(string stage, string text)
         {
             Log(text);
-            try { HideoutResearch.Active?.NoteDetail(stage, text); } catch { }
+            try
+            { HideoutResearch.Active?.NoteDetail(stage, text); }
+            catch { }
         }
         private void Log(string text) { try { _log?.Invoke(text); } catch { } }
     }

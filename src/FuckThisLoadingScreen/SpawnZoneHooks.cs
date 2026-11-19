@@ -15,10 +15,13 @@ namespace FuckThisLoadingScreen
         internal bool Closed;
         internal void Close()
         {
-            if (Closed) return;
+            if (Closed)
+                return;
             Closed = true;
-            if (ReferenceEquals(SpawnZoneHooks.Reconciliation, this)) SpawnZoneHooks.Reconciliation = Previous;
-            Previous = null; Run = null;
+            if (ReferenceEquals(SpawnZoneHooks.Reconciliation, this))
+                SpawnZoneHooks.Reconciliation = Previous;
+            Previous = null;
+            Run = null;
         }
     }
 
@@ -30,10 +33,14 @@ namespace FuckThisLoadingScreen
         internal bool Closed, Invalidated;
         internal void Close()
         {
-            if (Closed) return;
+            if (Closed)
+                return;
             Closed = true;
-            if (ReferenceEquals(SpawnZoneHooks.Lookup, this)) SpawnZoneHooks.Lookup = Previous;
-            Previous = null; Window = null; Zones = null;
+            if (ReferenceEquals(SpawnZoneHooks.Lookup, this))
+                SpawnZoneHooks.Lookup = Previous;
+            Previous = null;
+            Window = null;
+            Zones = null;
         }
     }
 
@@ -57,7 +64,8 @@ namespace FuckThisLoadingScreen
         {
             __state = null;
             LoadingRun run = PolicyHooks.Policy?.SpawnZoneRun;
-            if (run == null) return;
+            if (run == null)
+                return;
             __state = new SpawnReconciliation { Previous = Reconciliation, Run = run };
             Reconciliation = __state;
         }
@@ -69,7 +77,8 @@ namespace FuckThisLoadingScreen
         {
             __state = null;
             SpawnReconciliation window = Reconciliation;
-            if (window == null || window.Closed || !ReferenceEquals(window.Run, PolicyHooks.Policy?.SpawnZoneRun)) return;
+            if (window == null || window.Closed || !ReferenceEquals(window.Run, PolicyHooks.Policy?.SpawnZoneRun))
+                return;
             // Native CreateFromScene supplies this freshly discovered, ordered zone array.
             // FixSpawns mutates spawn markers only, not the BotZone population.
             __state = new SpawnZoneScope { Previous = Lookup, Window = window, Zones = __args[2] as Array };
@@ -101,7 +110,8 @@ namespace FuckThisLoadingScreen
         private static bool AreLive<T>(T[] zones) where T : UnityEngine.Object
         {
             foreach (T zone in zones)
-                if (zone == null || (zone is Component component && !component.gameObject.activeInHierarchy)) return false;
+                if (zone == null || (zone is Component component && !component.gameObject.activeInHierarchy))
+                    return false;
             return true;
         }
 
@@ -109,7 +119,8 @@ namespace FuckThisLoadingScreen
         {
             var code = instructions.Select(i => new CodeInstruction(i)).ToList();
             CodeInstruction[] calls = code.Where(i => i.Calls(NativeFindMethod)).ToArray();
-            if (calls.Length != 1) throw new InvalidOperationException("Spawn marker ABI mismatch; expected exactly one BotZone discovery call.");
+            if (calls.Length != 1)
+                throw new InvalidOperationException("Spawn marker ABI mismatch; expected exactly one BotZone discovery call.");
             calls[0].opcode = OpCodes.Call;
             calls[0].operand = AccessTools.Method(typeof(SpawnZoneHooks), nameof(FindZones)).MakeGenericMethod(NativeFindMethod.GetGenericArguments());
             return code;
@@ -118,7 +129,8 @@ namespace FuckThisLoadingScreen
         internal static void Reset()
         {
             // Main-thread synchronous scopes normally close before control returns to Unity.
-            Lookup = null; Reconciliation = null;
+            Lookup = null;
+            Reconciliation = null;
         }
     }
 }

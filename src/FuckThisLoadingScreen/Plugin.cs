@@ -76,10 +76,12 @@ namespace FuckThisLoadingScreen
                 MethodInfo[] execute = AccessTools.GetDeclaredMethods(presets).Where(m => m.Name == "Execute" && m.GetParameters().Length == 7).ToArray();
                 if (execute.Length != 2 || execute.Any(m => m.GetParameters()[3].Name != "loadInParallelMode" || m.GetParameters()[4].Name != "allowSceneActivation"))
                     throw new MissingMethodException("Scene preset parallel flag ABI mismatch");
-                foreach (MethodInfo method in execute) _harmony.Patch(method, prefix: Hook(nameof(PolicyHooks.PresetPrefix), Priority.Last));
+                foreach (MethodInfo method in execute)
+                    _harmony.Patch(method, prefix: Hook(nameof(PolicyHooks.PresetPrefix), Priority.Last));
                 Patch(One(presets, "ParallelLoadCoroutine", 2), nameof(PolicyHooks.SchedulingPrefix), nameof(PolicyHooks.SchedulingPostfix), nameof(PolicyHooks.SchedulingFinalizer));
                 MethodInfo loadScene = One(Find("EFT.AssetsManager.AssetsManager"), "LoadScene", 5);
-                if (loadScene.GetParameters()[3].Name != "allowSceneActivation") throw new MissingMethodException("Scene activation ABI mismatch");
+                if (loadScene.GetParameters()[3].Name != "allowSceneActivation")
+                    throw new MissingMethodException("Scene activation ABI mismatch");
                 _harmony.Patch(loadScene, prefix: Hook(nameof(PolicyHooks.ScenePrefix), Priority.Last));
                 InstallSpawnZoneLookup();
                 SceneBundleHooks.Install(_harmony, Find);
@@ -92,21 +94,31 @@ namespace FuckThisLoadingScreen
                 StartBotPreloadDelayFix();
                 LogDebug("Armed; native comparison modes retained. Options are frozen per attempt. " + ReadOptions());
                 TryStart("Texture-worker teardown fix", StartTextureWorkerFix, StopTextureWorkerFix);
-                if (Settings.Enabled.Value && fixDecalResults) TryStart("Decal result synchronization", StartDecalResultsFix, StopDecalResultsFix);
-                if (Settings.Enabled.Value && fixDecalArrays) TryStart("Decal texture-array resync", StartDecalArrayResync, StopDecalArrayResync);
-                if (Settings.Enabled.Value && fixIconMips) TryStart("Icon mip lifetimes", StartIconMipFix, AbandonIconMipFix);
-                if (Settings.Enabled.Value && fixMipBudget && _iconMipsArmed) TryStart("Mip budget accounting", StartMipBudgetAccounting, StopMipBudgetAccounting);
-                else if (Settings.Enabled.Value && fixMipBudget) Logger.LogWarning("Mip budget accounting requires the icon lifetime adapter; accounting remains off.");
-                if (Settings.Enabled.Value && retainMips) TryStart("Unused-mip retention", StartMipResidencyPolicy, StopMipResidencyPolicy);
-                if (Settings.Enabled.Value) TryStart("Texture quality with streaming", StartTextureQualityWithStreaming, StopTextureQualityWithStreaming);
-                if (Settings.Enabled.Value && markStreamable) TryStart("Streamable texture patch", StartStreamingBundlePatch, StopStreamingBundlePatch);
-                if (researchEnabled) TryStart("Hideout research", StartHideoutResearch, StopHideoutResearch);
+                if (Settings.Enabled.Value && fixDecalResults)
+                    TryStart("Decal result synchronization", StartDecalResultsFix, StopDecalResultsFix);
+                if (Settings.Enabled.Value && fixDecalArrays)
+                    TryStart("Decal texture-array resync", StartDecalArrayResync, StopDecalArrayResync);
+                if (Settings.Enabled.Value && fixIconMips)
+                    TryStart("Icon mip lifetimes", StartIconMipFix, AbandonIconMipFix);
+                if (Settings.Enabled.Value && fixMipBudget && _iconMipsArmed)
+                    TryStart("Mip budget accounting", StartMipBudgetAccounting, StopMipBudgetAccounting);
+                else if (Settings.Enabled.Value && fixMipBudget)
+                    Logger.LogWarning("Mip budget accounting requires the icon lifetime adapter; accounting remains off.");
+                if (Settings.Enabled.Value && retainMips)
+                    TryStart("Unused-mip retention", StartMipResidencyPolicy, StopMipResidencyPolicy);
+                if (Settings.Enabled.Value)
+                    TryStart("Texture quality with streaming", StartTextureQualityWithStreaming, StopTextureQualityWithStreaming);
+                if (Settings.Enabled.Value && markStreamable)
+                    TryStart("Streamable texture patch", StartStreamingBundlePatch, StopStreamingBundlePatch);
+                if (researchEnabled)
+                    TryStart("Hideout research", StartHideoutResearch, StopHideoutResearch);
                 Log.LogInfo(PluginInfo.Name + " " + PluginInfo.Version + " loaded." + migrated);
             }
             catch (Exception error)
             {
                 Logger.LogError("FTLS refused incomplete/unsupported patches: " + error);
-                Cleanup(); enabled = false;
+                Cleanup();
+                enabled = false;
             }
         }
 
@@ -139,7 +151,8 @@ namespace FuckThisLoadingScreen
             }
             catch (Exception error)
             {
-                try { cleanup?.Invoke(); }
+                try
+                { cleanup?.Invoke(); }
                 catch (Exception cleanupError) { Log.LogError("Feature '" + feature + "' cleanup failed: " + cleanupError); }
                 Log.LogError("Feature '" + feature + "' failed to start and is disabled: " + error);
                 return false;
@@ -149,15 +162,18 @@ namespace FuckThisLoadingScreen
         /// <summary>Debug output only, gated on Debug | Logging. Written at Info level because BepInEx's disk log drops Debug.</summary>
         internal static void LogDebug(string message)
         {
-            if (Settings.DebugLogging != null && Settings.DebugLogging.Value) Log.LogInfo("[debug] " + message);
+            if (Settings.DebugLogging != null && Settings.DebugLogging.Value)
+                Log.LogInfo("[debug] " + message);
         }
 
         /// <summary>Like <see cref="LogDebug"/> for messages that can repeat: at most one per key every two seconds, with a count of the dropped ones.</summary>
         internal static void LogDebugLimited(string key, string message)
         {
-            if (Settings.DebugLogging == null || !Settings.DebugLogging.Value) return;
+            if (Settings.DebugLogging == null || !Settings.DebugLogging.Value)
+                return;
             long nowMs = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * (1000.0 / System.Diagnostics.Stopwatch.Frequency));
-            if (!Limiter.TryAcquire(key, nowMs, out int suppressed)) return;
+            if (!Limiter.TryAcquire(key, nowMs, out int suppressed))
+                return;
             Log.LogInfo("[debug] " + message + (suppressed > 0 ? " (+" + suppressed + " similar message(s) suppressed)" : ""));
         }
 
@@ -165,17 +181,29 @@ namespace FuckThisLoadingScreen
         internal static void LogWarningLimited(string key, string message)
         {
             long nowMs = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * (1000.0 / System.Diagnostics.Stopwatch.Frequency));
-            if (!Limiter.TryAcquire("warn:" + key, nowMs, out int suppressed)) return;
+            if (!Limiter.TryAcquire("warn:" + key, nowMs, out int suppressed))
+                return;
             Log.LogWarning(message + (suppressed > 0 ? " (+" + suppressed + " similar message(s) suppressed)" : ""));
         }
 
-        private static Options ReadOptions() => new Options { Enabled = Settings.Enabled.Value, AudioBatching = Settings.LargerReaderBatches.Value,
-            AudioBatchSize = Math.Max(300, Math.Min(4800, Settings.ReaderBatchSize.Value)), NonCollectingMeasurements = Settings.NonCollectingDiagnosticMeasurements.Value,
-            Priority = Settings.IntegrationPriority.Value, ParallelScenes = Settings.ParallelSceneLoading.Value, ScopedSpawnZones = Settings.ScopedSpawnZoneLookup.Value,
-            SkipBuiltInSceneProbes = Settings.SkipBuiltInSceneBundleProbes.Value, LootBundlePriority = Settings.ExtendPriorityThroughLootBundles.Value,
-            FrameCapOverride = Settings.LoadingFrameCapOverride.Value, LoadingFrameLimit = Settings.LoadingFrameLimit.Value, BoundedScenes = Settings.BoundedAsReadySceneActivation.Value,
-            SceneWindow = Settings.SceneInFlightLimit.Value, DebugReports = Settings.WriteLoadingReports.Value,
-            ReduceBotProfilePreloadDelay = Settings.ReduceBotProfilePreloadDelay.Value };
+        private static Options ReadOptions() => new Options
+        {
+            Enabled = Settings.Enabled.Value,
+            AudioBatching = Settings.LargerReaderBatches.Value,
+            AudioBatchSize = Math.Max(300, Math.Min(4800, Settings.ReaderBatchSize.Value)),
+            NonCollectingMeasurements = Settings.NonCollectingDiagnosticMeasurements.Value,
+            Priority = Settings.IntegrationPriority.Value,
+            ParallelScenes = Settings.ParallelSceneLoading.Value,
+            ScopedSpawnZones = Settings.ScopedSpawnZoneLookup.Value,
+            SkipBuiltInSceneProbes = Settings.SkipBuiltInSceneBundleProbes.Value,
+            LootBundlePriority = Settings.ExtendPriorityThroughLootBundles.Value,
+            FrameCapOverride = Settings.LoadingFrameCapOverride.Value,
+            LoadingFrameLimit = Settings.LoadingFrameLimit.Value,
+            BoundedScenes = Settings.BoundedAsReadySceneActivation.Value,
+            SceneWindow = Settings.SceneInFlightLimit.Value,
+            DebugReports = Settings.WriteLoadingReports.Value,
+            ReduceBotProfilePreloadDelay = Settings.ReduceBotProfilePreloadDelay.Value
+        };
         private void StartBotPreloadDelayFix()
         {
             try
@@ -186,7 +214,8 @@ namespace FuckThisLoadingScreen
             }
             catch (Exception error)
             {
-                _botPreloadHarmony?.UnpatchSelf(); _botPreloadHarmony = null;
+                _botPreloadHarmony?.UnpatchSelf();
+                _botPreloadHarmony = null;
                 Logger.LogWarning("Bot profile preload delay remains native: " + error.Message);
             }
         }
@@ -228,32 +257,40 @@ namespace FuckThisLoadingScreen
         private static HarmonyMethod Hook(string name, int priority) => new HarmonyMethod(typeof(PolicyHooks), name) { priority = priority };
         private void Patch(MethodInfo method, string prefix, string postfix, string finalizer)
         {
-            if (!typeof(Task).IsAssignableFrom(method.ReturnType)) throw new NotSupportedException(method.ToString());
+            if (!typeof(Task).IsAssignableFrom(method.ReturnType))
+                throw new NotSupportedException(method.ToString());
             _harmony.Patch(method, Hook(prefix, Priority.First), Hook(postfix, Priority.Last), finalizer: Hook(finalizer, Priority.Last));
         }
         private void Update()
         {
             _policy?.Pump();
-            try { if (!_mipBudgetPumpFailed) MipBudgetAccounting.Active?.Pump(); }
+            try
+            { if (!_mipBudgetPumpFailed) MipBudgetAccounting.Active?.Pump(); }
             catch (Exception error)
             {
                 _mipBudgetPumpFailed = true;
                 Logger.LogError("Mip budget accounting stopped polling; cleanup waits for pending icon renders: " + error);
                 IconMipLifetime.WhenDrained(StopMipBudgetAccounting);
             }
-            try { DecalTextureArrayResync.Active?.Pump(); }
+            try
+            { DecalTextureArrayResync.Active?.Pump(); }
             catch (Exception error) { Logger.LogError("Decal texture-array resync stopped after an error: " + error); StopDecalArrayResync(); }
-            try { _hideoutResearch?.Pump(); }
+            try
+            { _hideoutResearch?.Pump(); }
             catch (Exception error) { Logger.LogError("Hideout research stopped after an observer error: " + error); StopHideoutResearch(); }
-            if (_policy != null && !_policy.IsLoading) FlushReports();
-            if (Settings.DumpLoadedTextures.Value) DumpTextures();
-            try { StreamingBundlePatch.Active?.Sweep(Time.realtimeSinceStartupAsDouble * 1000); }
+            if (_policy != null && !_policy.IsLoading)
+                FlushReports();
+            if (Settings.DumpLoadedTextures.Value)
+                DumpTextures();
+            try
+            { StreamingBundlePatch.Active?.Sweep(Time.realtimeSinceStartupAsDouble * 1000); }
             catch (Exception error) { Logger.LogError("Streamable texture patch stream cleanup failed: " + error); }
         }
         private void DumpTextures()
         {
             Settings.DumpLoadedTextures.Value = false;
-            try { LogDebug(TextureInventory.Dump(ModPaths.Locate(ModPaths.Dumps, ModPaths.TextureInventoryFolder), UnityEngine.SceneManagement.SceneManager.GetActiveScene().name)); }
+            try
+            { LogDebug(TextureInventory.Dump(ModPaths.Locate(ModPaths.Dumps, ModPaths.TextureInventoryFolder), UnityEngine.SceneManagement.SceneManager.GetActiveScene().name)); }
             catch (Exception error) { Logger.LogError("Texture inventory failed: " + error); }
         }
         private void StartTextureQualityWithStreaming()
@@ -261,11 +298,15 @@ namespace FuckThisLoadingScreen
             _textureQualityHarmony = new Harmony(PluginInfo.Guid + ".texture-quality-streaming");
             TextureQualityWithStreaming.Log = text => LogDebugLimited("texture-quality", text);
             TextureQualityWithStreaming.Install(_textureQualityHarmony, Find, new Guid(SupportedModuleId), () => Settings.Enabled.Value && Settings.ApplyTextureQualityWithStreaming.Value);
-            if (Settings.ApplyTextureQualityWithStreaming.Value) LogDebug("Texture quality mipmap limit is kept with mip streaming.");
+            if (Settings.ApplyTextureQualityWithStreaming.Value)
+                LogDebug("Texture quality mipmap limit is kept with mip streaming.");
         }
         private void StopTextureQualityWithStreaming()
         {
-            _textureQualityHarmony?.UnpatchSelf(); _textureQualityHarmony = null; TextureQualityWithStreaming.Enabled = null; TextureQualityWithStreaming.Log = null;
+            _textureQualityHarmony?.UnpatchSelf();
+            _textureQualityHarmony = null;
+            TextureQualityWithStreaming.Enabled = null;
+            TextureQualityWithStreaming.Log = null;
         }
         private void StartStreamingBundlePatch()
         {
@@ -278,8 +319,10 @@ namespace FuckThisLoadingScreen
         }
         private void StopStreamingBundlePatch()
         {
-            StreamingBundlePatch.Active?.Stop(); StreamingBundlePatch.Active = null;
-            _bundlePatchHarmony?.UnpatchSelf(); _bundlePatchHarmony = null;
+            StreamingBundlePatch.Active?.Stop();
+            StreamingBundlePatch.Active = null;
+            _bundlePatchHarmony?.UnpatchSelf();
+            _bundlePatchHarmony = null;
         }
         private void StartHideoutResearch()
         {
@@ -295,9 +338,12 @@ namespace FuckThisLoadingScreen
         private void StopHideoutResearch()
         {
             HideoutResearch.Active = null;
-            if (_hideoutResearch != null) Application.logMessageReceivedThreaded -= _hideoutResearch.OnLog;
-            _hideoutResearch?.Stop(); _hideoutResearch = null;
-            _hideoutHarmony?.UnpatchSelf(); _hideoutHarmony = null;
+            if (_hideoutResearch != null)
+                Application.logMessageReceivedThreaded -= _hideoutResearch.OnLog;
+            _hideoutResearch?.Stop();
+            _hideoutResearch = null;
+            _hideoutHarmony?.UnpatchSelf();
+            _hideoutHarmony = null;
         }
         private void StartTextureWorkerFix()
         {
@@ -309,7 +355,8 @@ namespace FuckThisLoadingScreen
         private void StopTextureWorkerFix()
         {
             TextureWorkerTeardown.Active = null;
-            _textureWorkerHarmony?.UnpatchSelf(); _textureWorkerHarmony = null;
+            _textureWorkerHarmony?.UnpatchSelf();
+            _textureWorkerHarmony = null;
         }
         private void FlushReports()
         {
@@ -331,12 +378,14 @@ namespace FuckThisLoadingScreen
         }
         private void Cleanup()
         {
-            _botPreloadHarmony?.UnpatchSelf(); _botPreloadHarmony = null;
+            _botPreloadHarmony?.UnpatchSelf();
+            _botPreloadHarmony = null;
             StopMipResidencyPolicy();
             IconMipLifetime.WhenDrained(StopMipBudgetAccounting);
             if (_iconMipHarmony != null)
             {
-                Harmony finishing = _iconMipHarmony; _iconMipHarmony = null;
+                Harmony finishing = _iconMipHarmony;
+                _iconMipHarmony = null;
                 IconMipLifetime.WhenDrained(() => finishing.UnpatchSelf());
             }
             _iconMipsArmed = false;
@@ -347,10 +396,14 @@ namespace FuckThisLoadingScreen
             StopTextureWorkerFix();
             StopHideoutResearch();
             PolicyHooks.Policy = null;
-            BoundedScenes.Enabled = null; BoundedScenes.Window = null; BoundedScenes.BeginReport = null; BoundedScenes.CaptureActive = null;
+            BoundedScenes.Enabled = null;
+            BoundedScenes.Window = null;
+            BoundedScenes.BeginReport = null;
+            BoundedScenes.CaptureActive = null;
             SpawnZoneHooks.Reset();
             _policy?.Stop();
-            _harmony?.UnpatchSelf(); _harmony = null;
+            _harmony?.UnpatchSelf();
+            _harmony = null;
             FlushReports();
         }
         private void OnDisable() => Cleanup();
@@ -364,7 +417,9 @@ namespace FuckThisLoadingScreen
         }
         private void StopDecalResultsFix()
         {
-            _decalResultHarmony?.UnpatchSelf(); _decalResultHarmony = null; _decalResultsArmed = false;
+            _decalResultHarmony?.UnpatchSelf();
+            _decalResultHarmony = null;
+            _decalResultsArmed = false;
         }
         private void StartDecalArrayResync()
         {
@@ -374,8 +429,10 @@ namespace FuckThisLoadingScreen
         }
         private void StopDecalArrayResync()
         {
-            DecalTextureArrayResync.Active?.Stop(); DecalTextureArrayResync.Active = null;
-            _decalArrayHarmony?.UnpatchSelf(); _decalArrayHarmony = null;
+            DecalTextureArrayResync.Active?.Stop();
+            DecalTextureArrayResync.Active = null;
+            _decalArrayHarmony?.UnpatchSelf();
+            _decalArrayHarmony = null;
         }
         private void StartIconMipFix()
         {
@@ -388,7 +445,8 @@ namespace FuckThisLoadingScreen
         private void AbandonIconMipFix()
         {
             // Nothing was armed, so no render can still own the patches and they are removed immediately.
-            _iconMipHarmony?.UnpatchSelf(); _iconMipHarmony = null;
+            _iconMipHarmony?.UnpatchSelf();
+            _iconMipHarmony = null;
         }
         private void StartMipBudgetAccounting()
         {
@@ -399,8 +457,10 @@ namespace FuckThisLoadingScreen
         }
         private void StopMipBudgetAccounting()
         {
-            MipBudgetAccounting.Active?.Stop(); MipBudgetAccounting.Active = null;
-            _mipBudgetHarmony?.UnpatchSelf(); _mipBudgetHarmony = null;
+            MipBudgetAccounting.Active?.Stop();
+            MipBudgetAccounting.Active = null;
+            _mipBudgetHarmony?.UnpatchSelf();
+            _mipBudgetHarmony = null;
         }
         private void StartMipResidencyPolicy()
         {
@@ -410,8 +470,10 @@ namespace FuckThisLoadingScreen
         }
         private void StopMipResidencyPolicy()
         {
-            MipResidencyPolicy.Active?.Stop(); MipResidencyPolicy.Active = null;
-            _mipResidencyHarmony?.UnpatchSelf(); _mipResidencyHarmony = null;
+            MipResidencyPolicy.Active?.Stop();
+            MipResidencyPolicy.Active = null;
+            _mipResidencyHarmony?.UnpatchSelf();
+            _mipResidencyHarmony = null;
         }
     }
 }

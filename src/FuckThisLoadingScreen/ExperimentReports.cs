@@ -28,7 +28,8 @@ namespace FuckThisLoadingScreen
         internal static string Schedules(LoadingRun run)
         {
             var csv = new StringBuilder("start_ms,end_ms,elapsed_ms,window,requested,submitted,completed,failed,peak_in_flight,outcome\n");
-            lock (run) foreach (SceneScheduleRow row in run.Schedules)
+            lock (run)
+            foreach (SceneScheduleRow row in run.Schedules)
                 csv.Append(N(row.StartMs)).Append(',').Append(row.EndMs.HasValue ? N(row.EndMs.Value) : "").Append(',')
                     .Append(row.EndMs.HasValue ? N(row.EndMs.Value - row.StartMs) : "").Append(',').Append(row.Window).Append(',')
                     .Append(row.Requested).Append(',').Append(row.Submitted).Append(',').Append(row.Completed).Append(',').Append(row.Failed).Append(',').Append(row.Peak).Append(',')

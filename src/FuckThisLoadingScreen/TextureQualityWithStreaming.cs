@@ -19,7 +19,8 @@ namespace FuckThisLoadingScreen
         internal static void Install(Harmony harmony, Func<string, Type> find, Guid module, Func<bool> enabled)
         {
             Type controller = find("EFT.Settings.Graphics.GraphicsSettingsController"), group = find("EFT.Settings.Graphics.GraphicsSettingsGroup");
-            if (controller.Module.ModuleVersionId != module) throw new NotSupportedException("Texture quality with streaming requires the supported EFT module");
+            if (controller.Module.ModuleVersionId != module)
+                throw new NotSupportedException("Texture quality with streaming requires the supported EFT module");
             Change = AccessTools.DeclaredMethod(controller, "ChangeTexturesQuality", new[] { typeof(bool), typeof(int) });
             if (Change == null || Change.IsStatic || Change.ReturnType != typeof(void))
                 throw new MissingMethodException(controller.FullName, "void ChangeTexturesQuality(bool, int)");
@@ -36,7 +37,8 @@ namespace FuckThisLoadingScreen
             try
             {
                 // Streaming off: EFT already applied the same limit.
-                if (!__0 || Enabled == null || !Enabled()) return;
+                if (!__0 || Enabled == null || !Enabled())
+                    return;
                 int limit = _mipBias(__1);
                 QualitySettings.globalTextureMipmapLimit = limit;
                 Log?.Invoke("Texture quality " + __1 + " keeps mipmap limit " + limit + " with mip streaming.");

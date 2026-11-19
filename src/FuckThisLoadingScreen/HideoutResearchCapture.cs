@@ -39,7 +39,10 @@ namespace FuckThisLoadingScreen
 
         internal HideoutResearchCapture(string directory, string metadata, string sampleHeader, Func<double> clock = null, Func<string> workerSnapshot = null)
         {
-            DirectoryPath = directory; this._clock = clock ?? (() => Now); this._workerSnapshot = workerSnapshot; _started = this._clock();
+            DirectoryPath = directory;
+            _clock = clock ?? (() => Now);
+            _workerSnapshot = workerSnapshot;
+            _started = _clock();
             _writer = new Thread(() => Write(metadata, sampleHeader)) { IsBackground = true, Name = "FTLS hideout research writer" };
             _writer.Start();
         }
@@ -48,11 +51,15 @@ namespace FuckThisLoadingScreen
         {
             lock (_gate)
             {
-                if (_closed) return null;
-                if (_spanCount >= MaxSpans) { _dropped++; return null; }
+                if (_closed)
+                    return null;
+                if (_spanCount >= MaxSpans)
+                { _dropped++; return null; }
                 var span = new HideoutResearchSpan(this, ++_spanCount, stage, Elapsed, entry);
-                _open.Add(span.Id, span); _lastActivity = Elapsed;
-                if (entry) { _entrySeen = true; _entries++; }
+                _open.Add(span.Id, span);
+                _lastActivity = Elapsed;
+                if (entry)
+                { _entrySeen = true; _entries++; }
                 Event(span, "begin", "", "", detail);
                 return span;
             }
@@ -62,16 +69,20 @@ namespace FuckThisLoadingScreen
         {
             lock (_gate)
             {
-                if (_closed || !_open.Remove(span.Id)) return;
+                if (_closed || !_open.Remove(span.Id))
+                    return;
                 _lastActivity = Elapsed;
-                if (span.Entry && --_entries == 0) _entryFinished = Elapsed;
+                if (span.Entry && --_entries == 0)
+                    _entryFinished = Elapsed;
                 Event(span, "end", status, Number(Elapsed - span.Started), "");
             }
         }
 
         internal void LaunchReturned(HideoutResearchSpan span)
         {
-            lock (_gate) if (!_closed) Event(span, "launch-return", "", Number(Elapsed - span.Started), "Synchronous kickoff only; task lifetime is the end row.");
+            lock (_gate)
+            if (!_closed)
+                Event(span, "launch-return", "", Number(Elapsed - span.Started), "Synchronous kickoff only; task lifetime is the end row.");
         }
 
         internal void Pulse() { lock (_gate) if (!_closed) _lastMain = Elapsed; }
@@ -79,9 +90,12 @@ namespace FuckThisLoadingScreen
         {
             lock (_gate)
             {
-                if (_closed) return;
-                if (_sampleCount >= MaxSamples) { _dropped++; return; }
-                _sampleCount++; Enqueue(true, Number(Elapsed) + "," + values);
+                if (_closed)
+                    return;
+                if (_sampleCount >= MaxSamples)
+                { _dropped++; return; }
+                _sampleCount++;
+                Enqueue(true, Number(Elapsed) + "," + values);
             }
         }
         internal void Note(string stage, string detail)
@@ -92,9 +106,12 @@ namespace FuckThisLoadingScreen
         {
             lock (_gate)
             {
-                if (_closed) return false;
-                if (_iconRows >= MaxIconRows) { _dropped++; return false; }
-                _iconRows++; return true;
+                if (_closed)
+                    return false;
+                if (_iconRows >= MaxIconRows)
+                { _dropped++; return false; }
+                _iconRows++;
+                return true;
             }
         }
         internal void IconRow(string values)
@@ -108,22 +125,30 @@ namespace FuckThisLoadingScreen
         {
             lock (_gate)
             {
-                if (_closed) return;
-                if (binding ? _decalBindings >= MaxDecalBindings : _decalRows >= MaxDecalRows) { _dropped++; return; }
-                if (binding) _decalBindings++; else _decalRows++;
+                if (_closed)
+                    return;
+                if (binding ? _decalBindings >= MaxDecalBindings : _decalRows >= MaxDecalRows)
+                { _dropped++; return; }
+                if (binding)
+                    _decalBindings++;
+                else
+                    _decalRows++;
                 EnqueueKind(binding ? (byte)4 : (byte)3, Number(Elapsed) + "," + values);
             }
         }
 
         internal void Close(string reason)
         {
-            lock (_gate) if (!_closed) { _closeReason = reason; Seal(reason); }
+            lock (_gate)
+            if (!_closed)
+            { _closeReason = reason; Seal(reason); }
             Signal();
         }
         internal bool Join(int milliseconds) => _writer.Join(milliseconds);
         private void Seal(string reason)
         {
-            foreach (var span in _open.Values) Event(span, "end", "incomplete-at-" + reason, Number(Elapsed - span.Started), "No completion was observed.");
+            foreach (var span in _open.Values)
+                Event(span, "end", "incomplete-at-" + reason, Number(Elapsed - span.Started), "No completion was observed.");
             _open.Clear();
             Enqueue(false, Number(Elapsed) + ",0,capture,end," + Quote(reason) + ",," + Quote("dropped_rows=" + _dropped));
             _closed = true;
@@ -134,8 +159,10 @@ namespace FuckThisLoadingScreen
             => EnqueueKind(sample ? (byte)1 : (byte)0, row);
         private void EnqueueKind(byte kind, string row)
         {
-            if (_queue.Count >= MaxQueue) { _dropped++; return; }
-            _queue.Enqueue((kind, row)); Signal();
+            if (_queue.Count >= MaxQueue)
+            { _dropped++; return; }
+            _queue.Enqueue((kind, row));
+            Signal();
         }
         private void Signal() { try { _wake.Set(); } catch (ObjectDisposedException) { } }
 
@@ -153,9 +180,11 @@ namespace FuckThisLoadingScreen
                 using (var decalBindingsFile = new StreamWriter(Path.Combine(DirectoryPath, "decal-bindings.csv"), false, new UTF8Encoding(false)))
                 using (var workerState = _workerSnapshot == null ? null : new StreamWriter(Path.Combine(DirectoryPath, "worker.csv"), false, new UTF8Encoding(false)))
                 {
-                    events.WriteLine(EventHeader); samples.WriteLine(sampleHeader);
+                    events.WriteLine(EventHeader);
+                    samples.WriteLine(sampleHeader);
                     icons.WriteLine(IconMipProbe.Header);
-                    decalMips.WriteLine(DecalMipProbe.MipHeader); decalBindingsFile.WriteLine(DecalMipProbe.BindingHeader);
+                    decalMips.WriteLine(DecalMipProbe.MipHeader);
+                    decalBindingsFile.WriteLine(DecalMipProbe.BindingHeader);
                     workerState?.WriteLine(HideoutDecalState.Header);
                     heartbeat.WriteLine("elapsed_ms,last_main_ms,main_silence_ms,open_spans,samples,dropped_rows,active_stages,status");
                     double nextFlush = 0;
@@ -165,16 +194,20 @@ namespace FuckThisLoadingScreen
                         lock (_gate)
                         {
                             double now = Elapsed;
-                            if (!_closed && now >= 600000) { _closeReason = "timeout-600s"; Seal(_closeReason); }
-                            if (!_closed && _entrySeen && _entries == 0 && _activeIcons == 0 && now - _entryFinished >= 10000 && now - _lastDecal >= 10000) { _closeReason = "entry-tail-complete"; Seal(_closeReason); }
-                            if (!_closed && !_entrySeen && _activeIcons == 0 && _open.Count == 0 && now - _lastActivity >= 30000) { _closeReason = "preload-idle"; Seal(_closeReason); }
+                            if (!_closed && now >= 600000)
+                            { _closeReason = "timeout-600s"; Seal(_closeReason); }
+                            if (!_closed && _entrySeen && _entries == 0 && _activeIcons == 0 && now - _entryFinished >= 10000 && now - _lastDecal >= 10000)
+                            { _closeReason = "entry-tail-complete"; Seal(_closeReason); }
+                            if (!_closed && !_entrySeen && _activeIcons == 0 && _open.Count == 0 && now - _lastActivity >= 30000)
+                            { _closeReason = "preload-idle"; Seal(_closeReason); }
                             finished = _closed;
                         }
                         // Never hold the producer lock while doing disk I/O.
                         for (int i = 0; i < MaxQueue; i++)
                         {
                             (byte Kind, string Row) row;
-                            lock (_gate) { if (_queue.Count == 0) break; row = _queue.Dequeue(); }
+                            lock (_gate)
+                            { if (_queue.Count == 0) break; row = _queue.Dequeue(); }
                             (row.Kind == 4 ? decalBindingsFile : row.Kind == 3 ? decalMips : row.Kind == 2 ? icons : row.Kind == 1 ? samples : events).WriteLine(row.Row);
                         }
                         if (Elapsed >= nextFlush || finished)
@@ -183,14 +216,24 @@ namespace FuckThisLoadingScreen
                             lock (_gate)
                             {
                                 var stages = new List<string>();
-                                foreach (var span in _open.Values) { if (stages.Count == 16) break; stages.Add(span.Id + ":" + span.Stage); }
+                                foreach (var span in _open.Values)
+                                { if (stages.Count == 16) break; stages.Add(span.Id + ":" + span.Stage); }
                                 row = Number(Elapsed) + "," + Number(_lastMain) + "," + Number(Elapsed - _lastMain) + "," + _open.Count + "," + _sampleCount + "," + _dropped + "," + Quote(string.Join(" | ", stages)) + "," + Quote(_closeReason ?? "recording");
                             }
                             heartbeat.WriteLine(row);
-                            if (workerState != null) workerState.WriteLine(Number(Elapsed) + "," + _workerSnapshot());
-                            events.Flush(); samples.Flush(); heartbeat.Flush(); icons.Flush(); decalMips.Flush(); decalBindingsFile.Flush(); workerState?.Flush(); nextFlush = Elapsed + 1000;
+                            if (workerState != null)
+                                workerState.WriteLine(Number(Elapsed) + "," + _workerSnapshot());
+                            events.Flush();
+                            samples.Flush();
+                            heartbeat.Flush();
+                            icons.Flush();
+                            decalMips.Flush();
+                            decalBindingsFile.Flush();
+                            workerState?.Flush();
+                            nextFlush = Elapsed + 1000;
                         }
-                        if (finished) break;
+                        if (finished)
+                            break;
                         _wake.WaitOne(250);
                     }
                 }
@@ -216,7 +259,8 @@ namespace FuckThisLoadingScreen
         internal void Observe(Task task)
         {
             Owner.LaunchReturned(this);
-            if (task == null) { Finish("null-task"); return; }
+            if (task == null)
+            { Finish("null-task"); return; }
             // Do not replace the Task or read Exception: preserve native await/fault semantics.
             task.ContinueWith(done => { try { Finish(done.IsCanceled ? "canceled" : done.IsFaulted ? "faulted" : "completed"); } catch { } },
                 CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);

@@ -30,13 +30,19 @@ namespace FuckThisLoadingScreen
         internal MipBudgetAccounting(Func<float> selected, Func<float> read, Action<float> write,
             Func<ulong> nonstreaming, Func<bool> streaming, Func<int> icons, Func<double> clock)
         {
-            this._selected = selected; this._read = read; this._write = write;
-            this._nonstreaming = nonstreaming; this._streaming = streaming; this._icons = icons; this._clock = clock;
+            _selected = selected;
+            _read = read;
+            _write = write;
+            _nonstreaming = nonstreaming;
+            _streaming = streaming;
+            _icons = icons;
+            _clock = clock;
         }
         internal static MipBudgetAccounting Install(Harmony harmony, Func<string, Type> find, Guid module)
         {
             Type graphics = find("EFT.Settings.Graphics.GraphicsSettingsController");
-            if (graphics.Module.ModuleVersionId != module) throw new NotSupportedException("Mip budget accounting requires the supported EFT module");
+            if (graphics.Module.ModuleVersionId != module)
+                throw new NotSupportedException("Mip budget accounting requires the supported EFT module");
             FieldInfo field = AccessTools.Field(graphics, "MipStreamingMemoryBudget");
             MethodInfo refresh = AccessTools.DeclaredMethod(graphics, "RefreshStreamingMemoryBudget");
             if (field?.FieldType != typeof(float) || !field.IsStatic || refresh?.ReturnType != typeof(void) || refresh.IsStatic ||
@@ -46,7 +52,8 @@ namespace FuckThisLoadingScreen
             var policy = new MipBudgetAccounting(() => (float)field.GetValue(null), () => QualitySettings.streamingMipmapsMemoryBudget,
                 value => QualitySettings.streamingMipmapsMemoryBudget = value, () => Texture.nonStreamingTextureMemory,
                 () => QualitySettings.streamingMipmapsActive, () => IconMipLifetime.ActiveBudgets, () => HideoutResearchCapture.Now);
-            policy.NativePolicyWritten(); return policy;
+            policy.NativePolicyWritten();
+            return policy;
         }
         internal static void Refreshed() => Active?.NativePolicyWritten();
 
@@ -54,34 +61,49 @@ namespace FuckThisLoadingScreen
         // scene/settings selection may intentionally replace a previous override.
         internal void NativePolicyWritten()
         {
-            if (_stopped) return;
-            _owns = true; _applied = _read(); Apply();
+            if (_stopped)
+                return;
+            _owns = true;
+            _applied = _read();
+            Apply();
         }
         internal void Pump()
         {
-            if (_stopped || _clock() < _nextPoll) return;
-            _nextPoll = _clock() + 500; Apply();
+            if (_stopped || _clock() < _nextPoll)
+                return;
+            _nextPoll = _clock() + 500;
+            Apply();
         }
         internal void IconsFinished() { if (!_stopped) Apply(); }
         private void Apply()
         {
-            if (!_owns) return;
-            if (_read() != _applied) { _owns = false; State = "external-override"; return; }
-            BaseBudget = _selected(); IconAllowance = _icons() > 0 ? 100f : 0f;
+            if (!_owns)
+                return;
+            if (_read() != _applied)
+            { _owns = false; State = "external-override"; return; }
+            BaseBudget = _selected();
+            IconAllowance = _icons() > 0 ? 100f : 0f;
             if (float.IsNaN(BaseBudget) || float.IsInfinity(BaseBudget) || BaseBudget < 0)
             { _owns = false; State = "invalid-base"; return; }
             bool enabled = _streaming();
             NonstreamingAllowance = enabled ? (float)Math.Ceiling(_nonstreaming() / 1048576.0) : 0f;
             float total = BaseBudget + NonstreamingAllowance + IconAllowance;
-            if (float.IsInfinity(total)) { _owns = false; State = "invalid-total"; return; }
-            if (total != _applied) _write(total);
-            _applied = total; State = enabled ? "active" : "streaming-off";
+            if (float.IsInfinity(total))
+            { _owns = false; State = "invalid-total"; return; }
+            if (total != _applied)
+                _write(total);
+            _applied = total;
+            State = enabled ? "active" : "streaming-off";
         }
         internal void Stop()
         {
-            if (_stopped) return;
-            if (_owns && _read() == _applied) _write(BaseBudget + (_icons() > 0 ? 100f : 0f));
-            _owns = false; _stopped = true; State = "stopped";
+            if (_stopped)
+                return;
+            if (_owns && _read() == _applied)
+                _write(BaseBudget + (_icons() > 0 ? 100f : 0f));
+            _owns = false;
+            _stopped = true;
+            State = "stopped";
         }
         internal static string Snapshot()
         {

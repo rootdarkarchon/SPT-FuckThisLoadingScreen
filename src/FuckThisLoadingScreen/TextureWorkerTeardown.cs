@@ -23,10 +23,13 @@ namespace FuckThisLoadingScreen
 
         private TextureWorkerTeardown(Type renderer, Type tree, Func<bool> enabled, Action<string> warning)
         {
-            this._enabled = enabled; this._warning = warning;
+            _enabled = enabled;
+            _warning = warning;
             _ownedTrees = RequireField(renderer, "_texturesQuadTrees", false);
-            _trees = RequireField(tree, "_trees", true); _worker = RequireField(tree, "_workThreads", true);
-            _source = RequireField(tree, "_terminateTokenSource", true); _token = RequireField(tree, "_terminateToken", true);
+            _trees = RequireField(tree, "_trees", true);
+            _worker = RequireField(tree, "_workThreads", true);
+            _source = RequireField(tree, "_terminateTokenSource", true);
+            _token = RequireField(tree, "_terminateToken", true);
             if (!_ownedTrees.FieldType.IsGenericType || _ownedTrees.FieldType.GetGenericTypeDefinition() != typeof(Dictionary<,>) || _ownedTrees.FieldType.GetGenericArguments()[1] != tree ||
                 _trees.FieldType != typeof(HashSet<>).MakeGenericType(tree) || _worker.FieldType != typeof(Thread) ||
                 _source.FieldType != typeof(CancellationTokenSource) || _token.FieldType != typeof(CancellationToken))
@@ -38,7 +41,8 @@ namespace FuckThisLoadingScreen
         private static FieldInfo RequireField(Type type, string name, bool isStatic)
         {
             FieldInfo field = AccessTools.Field(type, name);
-            if (field == null || field.IsStatic != isStatic) throw new MissingFieldException(type.FullName, name);
+            if (field == null || field.IsStatic != isStatic)
+                throw new MissingFieldException(type.FullName, name);
             return field;
         }
         internal static TextureWorkerTeardown Install(Harmony harmony, Func<string, Type> find, Guid expectedModule, Func<bool> enabled, Action<string> warning)
@@ -54,14 +58,17 @@ namespace FuckThisLoadingScreen
         }
         internal static void Prefix(object __instance)
         {
-            try { Active?.Before(__instance); }
+            try
+            { Active?.Before(__instance); }
             catch (Exception error) { Active?.Warn("Texture-worker teardown fix declined; native cleanup retained: " + error.GetType().Name + ": " + error.Message); }
         }
         internal void Before(object renderer)
         {
-            if (!_enabled() || Environment.CurrentManagedThreadId != _mainThread) return;
+            if (!_enabled() || Environment.CurrentManagedThreadId != _mainThread)
+                return;
             var thread = _worker.GetValue(null) as Thread;
-            if (thread == null || !thread.IsAlive || ReferenceEquals(thread, Thread.CurrentThread)) return;
+            if (thread == null || !thread.IsAlive || ReferenceEquals(thread, Thread.CurrentThread))
+                return;
             var owned = _ownedTrees.GetValue(renderer) as IDictionary;
             object registered = _trees.GetValue(null);
             // In this EFT ABI only main-thread construction/disposal changes the set; the
@@ -78,7 +85,8 @@ namespace FuckThisLoadingScreen
                 // No renderer/tree lock is held. Cancellation prevents the next unfair
                 // reacquisition; wait for the existing iteration to release the lock.
                 result = StopWorker(thread, cancellation, 2000);
-                if (result == "join-timeout") Warn("Texture-worker quiescence exceeded 2s; native cleanup retained.");
+                if (result == "join-timeout")
+                    Warn("Texture-worker quiescence exceeded 2s; native cleanup retained.");
             }
             finally { try { span?.Finish(result); } catch { } }
         }
@@ -90,9 +98,12 @@ namespace FuckThisLoadingScreen
 
         internal static string StopWorker(Thread thread, CancellationTokenSource cancellation, int timeoutMs)
         {
-            if (thread == null || !thread.IsAlive) return "no-live-worker";
-            if (ReferenceEquals(thread, Thread.CurrentThread)) return "same-thread-skipped";
-            if (cancellation == null) return "no-cancellation-source";
+            if (thread == null || !thread.IsAlive)
+                return "no-live-worker";
+            if (ReferenceEquals(thread, Thread.CurrentThread))
+                return "same-thread-skipped";
+            if (cancellation == null)
+                return "no-cancellation-source";
             cancellation.Cancel();
             return thread.Join(timeoutMs) ? "stopped-before-disposal" : "join-timeout";
         }
@@ -106,12 +117,16 @@ namespace FuckThisLoadingScreen
         }
         internal static bool OwnsAll(IEnumerable owned, IEnumerable registered)
         {
-            if (owned == null || registered == null) return false;
+            if (owned == null || registered == null)
+                return false;
             var ownership = new HashSet<object>(ReferenceIdentity.Instance);
-            foreach (object tree in owned) { if (tree == null || !ownership.Add(tree)) return false; }
-            if (ownership.Count == 0) return false;
+            foreach (object tree in owned)
+            { if (tree == null || !ownership.Add(tree)) return false; }
+            if (ownership.Count == 0)
+                return false;
             int count = 0;
-            foreach (object tree in registered) { if (!ownership.Contains(tree)) return false; count++; }
+            foreach (object tree in registered)
+            { if (!ownership.Contains(tree)) return false; count++; }
             return count == ownership.Count;
         }
         private sealed class ReferenceIdentity : IEqualityComparer<object>

@@ -50,28 +50,36 @@ namespace FuckThisLoadingScreen
         {
             reason = ProbeFallback.Shape;
             if (manager == null || string.IsNullOrEmpty(bundle) || !bundle.EndsWith(".unity", StringComparison.Ordinal) ||
-                bundle.IndexOfAny(AmbiguousUriCharacters) >= 0 || !string.Equals(bundle, scene, StringComparison.Ordinal)) return false;
+                bundle.IndexOfAny(AmbiguousUriCharacters) >= 0 || !string.Equals(bundle, scene, StringComparison.Ordinal))
+                return false;
             reason = ProbeFallback.BuiltIn;
-            if (!IsBuiltIn(scene)) return false;
+            if (!IsBuiltIn(scene))
+                return false;
             reason = ProbeFallback.Location;
             string url = Url(manager);
             if (url == null || !url.EndsWith("/", StringComparison.Ordinal) || !Uri.TryCreate(url, UriKind.Absolute, out Uri uri) || !uri.IsFile || uri.IsUnc ||
                 uri.Query.Length != 0 || uri.Fragment.Length != 0 ||
-                !string.Equals(Path.GetFullPath(uri.LocalPath).TrimEnd('/', '\\'), ExpectedDirectory, StringComparison.OrdinalIgnoreCase)) return false;
+                !string.Equals(Path.GetFullPath(uri.LocalPath).TrimEnd('/', '\\'), ExpectedDirectory, StringComparison.OrdinalIgnoreCase))
+                return false;
             reason = ProbeFallback.Manifest;
             // Inspect the current dictionary rather than caching a manifest snapshot.
             IDictionary manifest = Manifest(manager);
-            if (manifest == null || manifest.Contains(bundle)) return false;
+            if (manifest == null || manifest.Contains(bundle))
+                return false;
             reason = ProbeFallback.Registered;
             IDictionary registered = Registered();
-            if (registered == null || registered.Contains(bundle)) return false;
+            if (registered == null || registered.Contains(bundle))
+                return false;
             reason = ProbeFallback.ExistingOperation;
             IDictionary loaded = Loaded(manager), pending = Pending(manager);
-            if (loaded == null || pending == null || loaded.Contains(bundle) || pending.Contains(bundle)) return false;
+            if (loaded == null || pending == null || loaded.Contains(bundle) || pending.Contains(bundle))
+                return false;
             reason = ProbeFallback.File;
             string target = Path.GetFullPath(Path.Combine(uri.LocalPath, bundle));
-            if (!target.StartsWith(ExpectedDirectory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return false;
-            try { System.IO.File.GetAttributes(target); return false; }
+            if (!target.StartsWith(ExpectedDirectory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return false;
+            try
+            { System.IO.File.GetAttributes(target); return false; }
             catch (FileNotFoundException) { }
             catch (DirectoryNotFoundException) { }
             // Access/IO errors propagate to the wrapper's fail-closed native fallback.
@@ -81,41 +89,50 @@ namespace FuckThisLoadingScreen
         internal static IOperation<TAsset> Load<TManager, TAsset>(TManager manager, string bundle, bool logErrors, string scene)
         {
             LoadingRun run = PolicyHooks.Policy?.SceneProbeRun;
-            if (run == null) return Native<TManager, TAsset>.Load(manager, bundle, logErrors);
+            if (run == null)
+                return Native<TManager, TAsset>.Load(manager, bundle, logErrors);
             long started = Stopwatch.GetTimestamp();
             bool skip = false;
             ProbeFallback reason = ProbeFallback.ObserverError;
-            try { if (run.Options.SkipBuiltInSceneProbes) skip = CanSkip(manager, bundle, scene, out reason); }
+            try
+            { if (run.Options.SkipBuiltInSceneProbes) skip = CanSkip(manager, bundle, scene, out reason); }
             catch (Exception error)
             {
                 reason = ProbeFallback.ObserverError;
-                if (run.SceneProbeFirstError == null) run.SceneProbeFirstError = error.GetType().Name;
+                if (run.SceneProbeFirstError == null)
+                    run.SceneProbeFirstError = error.GetType().Name;
             }
             run.SceneProbeRequests++;
             run.SceneProbeGuardTicks += Stopwatch.GetTimestamp() - started;
-            if (skip) { run.SceneProbeSkipped++; return new SkippedProbe<TAsset>(); }
+            if (skip)
+            { run.SceneProbeSkipped++; return new SkippedProbe<TAsset>(); }
             run.SceneProbeNative++;
-            if (run.Options.SkipBuiltInSceneProbes) run.SceneProbeFallbacks[(int)reason]++;
+            if (run.Options.SkipBuiltInSceneProbes)
+                run.SceneProbeFallbacks[(int)reason]++;
             return Native<TManager, TAsset>.Load(manager, bundle, logErrors);
         }
 
         internal static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase __originalMethod)
         {
             FieldInfo scene = __originalMethod.DeclaringType.GetField("sceneName", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            if (scene?.FieldType != typeof(string)) throw new MissingFieldException("Scene coroutine sceneName ABI");
+            if (scene?.FieldType != typeof(string))
+                throw new MissingFieldException("Scene coroutine sceneName ABI");
             return Rewrite(instructions, scene);
         }
         internal static IEnumerable<CodeInstruction> Rewrite(IEnumerable<CodeInstruction> instructions, FieldInfo scene)
         {
-            var result = new List<CodeInstruction>(); int count = 0;
+            var result = new List<CodeInstruction>();
+            int count = 0;
             foreach (var original in instructions)
             {
                 var code = new CodeInstruction(original);
                 if (code.Calls(NativeMethod))
                 {
                     var entry = new CodeInstruction(OpCodes.Ldarg_0);
-                    entry.MoveLabelsFrom(code); entry.MoveBlocksFrom(code);
-                    result.Add(entry); result.Add(new CodeInstruction(OpCodes.Ldfld, scene));
+                    entry.MoveLabelsFrom(code);
+                    entry.MoveBlocksFrom(code);
+                    result.Add(entry);
+                    result.Add(new CodeInstruction(OpCodes.Ldfld, scene));
                     code.opcode = OpCodes.Call;
                     code.operand = AccessTools.Method(typeof(SceneBundleHooks), nameof(Load)).MakeGenericMethod(
                         NativeMethod.DeclaringType, NativeMethod.ReturnType.GetGenericArguments().Single());
@@ -123,7 +140,8 @@ namespace FuckThisLoadingScreen
                 }
                 result.Add(code);
             }
-            if (count != 1) throw new InvalidOperationException("Scene bundle probe ABI mismatch: " + count);
+            if (count != 1)
+                throw new InvalidOperationException("Scene bundle probe ABI mismatch: " + count);
             return result;
         }
 
@@ -144,13 +162,15 @@ namespace FuckThisLoadingScreen
                 throw new MissingMemberException("Scene probe live dictionary ABI");
             Url = obj => (string)url.GetValue(obj);
             Manifest = obj => (IDictionary)details.GetValue(manifest.GetValue(obj));
-            Loaded = obj => (IDictionary)loaded.GetValue(obj); Pending = obj => (IDictionary)pending.GetValue(obj);
+            Loaded = obj => (IDictionary)loaded.GetValue(obj);
+            Pending = obj => (IDictionary)pending.GetValue(obj);
             Registered = () => (IDictionary)mods.GetValue(null);
             ExpectedDirectory = Path.GetFullPath(Path.Combine(Application.streamingAssetsPath, "Windows")).TrimEnd('/', '\\');
             Type scene = find("EFT.AssetsManager.AssetsManager+LoadSceneOperation");
             MethodInfo coroutine = AccessTools.GetDeclaredMethods(scene).Single(m => m.Name == "Coroutine" && m.GetParameters().Length == 6);
             MethodInfo step = coroutine.GetCustomAttribute<AsyncStateMachineAttribute>()?.StateMachineType.GetMethod("MoveNext", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            if (step == null) throw new MissingMethodException("Scene coroutine state machine ABI");
+            if (step == null)
+                throw new MissingMethodException("Scene coroutine state machine ABI");
             // Timer probes must see the native call first; preserve their surrounding hooks.
             harmony.Patch(step, transpiler: new HarmonyMethod(typeof(SceneBundleHooks), nameof(Transpiler)) { priority = Priority.Last });
         }

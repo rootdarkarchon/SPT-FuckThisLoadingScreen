@@ -19,7 +19,8 @@ namespace FuckThisLoadingScreen
         /// <returns>The number of files and folders moved; 0 when there was nothing to migrate.</returns>
         internal static int Run(string legacyRoot, string reportsDirectory, string hideoutDirectory, string inventoryDirectory, string indexFile)
         {
-            if (!Directory.Exists(legacyRoot)) return 0;
+            if (!Directory.Exists(legacyRoot))
+                return 0;
 
             var moved = MoveContents(Path.Combine(legacyRoot, LegacyHideoutFolder), hideoutDirectory);
             moved += MoveContents(Path.Combine(legacyRoot, LegacyInventoryFolder), inventoryDirectory);
@@ -42,16 +43,20 @@ namespace FuckThisLoadingScreen
 
         private static int MoveContents(string source, string destination)
         {
-            if (!Directory.Exists(source)) return 0;
+            if (!Directory.Exists(source))
+                return 0;
 
             var moved = 0;
             foreach (var entry in Directory.GetFileSystemEntries(source))
             {
                 var target = Path.Combine(destination, Path.GetFileName(entry));
-                if (File.Exists(target) || Directory.Exists(target)) continue;
+                if (File.Exists(target) || Directory.Exists(target))
+                    continue;
                 Directory.CreateDirectory(destination);
-                if (Directory.Exists(entry)) Directory.Move(entry, target);
-                else File.Move(entry, target);
+                if (Directory.Exists(entry))
+                    Directory.Move(entry, target);
+                else
+                    File.Move(entry, target);
                 moved++;
             }
 
@@ -61,7 +66,8 @@ namespace FuckThisLoadingScreen
 
         private static int MoveFile(string source, string destination)
         {
-            if (File.Exists(destination)) return 0;
+            if (File.Exists(destination))
+                return 0;
             Directory.CreateDirectory(Path.GetDirectoryName(destination));
             File.Move(source, destination);
             return 1;
@@ -69,7 +75,8 @@ namespace FuckThisLoadingScreen
 
         private static void RemoveIfEmpty(string directory)
         {
-            if (Directory.GetFileSystemEntries(directory).Length == 0) Directory.Delete(directory);
+            if (Directory.GetFileSystemEntries(directory).Length == 0)
+                Directory.Delete(directory);
         }
     }
 }

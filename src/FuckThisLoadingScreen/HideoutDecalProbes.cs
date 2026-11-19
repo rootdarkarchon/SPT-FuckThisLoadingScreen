@@ -21,26 +21,34 @@ namespace FuckThisLoadingScreen
         private long _acquired, _lastHold, _maxHold, _acquisitions;
 
         internal HideoutDecalState(Func<HideoutResearchCapture> capture, Func<int> treeCount)
-        { this._capture = capture; this._treeCount = treeCount; }
+        { _capture = capture; _treeCount = treeCount; }
 
         internal void Started()
         {
-            _worker = Thread.CurrentThread; Volatile.Write(ref _held, 0); _phase = "running";
+            _worker = Thread.CurrentThread;
+            Volatile.Write(ref _held, 0);
+            _phase = "running";
             _capture()?.Note("decals.texture-worker", "started thread=" + _worker.ManagedThreadId);
         }
         internal void Waiting() { _phase = "waiting-tree-lock"; }
         internal void Acquired()
         {
             Interlocked.Exchange(ref _acquired, Stopwatch.GetTimestamp());
-            Volatile.Write(ref _held, 1); _phase = "holding-tree-lock"; Interlocked.Increment(ref _acquisitions);
+            Volatile.Write(ref _held, 1);
+            _phase = "holding-tree-lock";
+            Interlocked.Increment(ref _acquisitions);
             // Called only after the native worker has acquired the lock already.
-            try { Volatile.Write(ref _trees, _treeCount()); } catch { Volatile.Write(ref _trees, -1); }
+            try
+            { Volatile.Write(ref _trees, _treeCount()); }
+            catch { Volatile.Write(ref _trees, -1); }
         }
         internal void Released()
         {
             long ticks = Stopwatch.GetTimestamp() - Interlocked.Read(ref _acquired);
-            Volatile.Write(ref _held, 0); Interlocked.Exchange(ref _lastHold, ticks);
-            if (ticks > Interlocked.Read(ref _maxHold)) Interlocked.Exchange(ref _maxHold, ticks);
+            Volatile.Write(ref _held, 0);
+            Interlocked.Exchange(ref _lastHold, ticks);
+            if (ticks > Interlocked.Read(ref _maxHold))
+                Interlocked.Exchange(ref _maxHold, ticks);
             _phase = "running";
         }
         internal void Exited(Exception exception)
@@ -55,7 +63,9 @@ namespace FuckThisLoadingScreen
         {
             Thread observed = _worker;
             string state;
-            try { state = observed == null ? "not-observed" : observed.ThreadState.ToString(); } catch { state = "unavailable"; }
+            try
+            { state = observed == null ? "not-observed" : observed.ThreadState.ToString(); }
+            catch { state = "unavailable"; }
             bool locked = Volatile.Read(ref _held) != 0;
             double age = locked ? (Stopwatch.GetTimestamp() - Interlocked.Read(ref _acquired)) * 1000.0 / Stopwatch.Frequency : 0;
             return (observed?.ManagedThreadId ?? 0) + "," + HideoutResearchCapture.Quote(_phase) + "," + HideoutResearchCapture.Quote(state) + "," +
@@ -99,12 +109,15 @@ namespace FuckThisLoadingScreen
                 {
                     if (i == 0 || !(code[i - 1].operand is FieldInfo field) || field.DeclaringType.Name != "TextureQuadTree" || field.Name != "_treesLock")
                         throw new InvalidOperationException("TextureQuadTree.Dispose tree-lock call-site mismatch");
-                    code[i].opcode = OpCodes.Call; code[i].operand = AccessTools.Method(typeof(HideoutDecalProbes), nameof(DisposeEnter)); enters++;
+                    code[i].opcode = OpCodes.Call;
+                    code[i].operand = AccessTools.Method(typeof(HideoutDecalProbes), nameof(DisposeEnter));
+                    enters++;
                 }
                 else if (code[i].Calls(Join))
                 { code[i].opcode = OpCodes.Call; code[i].operand = AccessTools.Method(typeof(HideoutDecalProbes), nameof(DisposeJoin)); joins++; }
             }
-            if (enters != 1 || joins != 1) throw new InvalidOperationException("TextureQuadTree.Dispose requires exactly one native Enter and Join");
+            if (enters != 1 || joins != 1)
+                throw new InvalidOperationException("TextureQuadTree.Dispose requires exactly one native Enter and Join");
             return code;
         }
         internal static IEnumerable<CodeInstruction> WorkerTranspiler(IEnumerable<CodeInstruction> instructions)
@@ -116,13 +129,17 @@ namespace FuckThisLoadingScreen
                 bool treeLock = code[i - 1].operand is FieldInfo field && field.DeclaringType.Name == "TextureQuadTree" && field.Name == "_treesLock";
                 if (code[i].Calls(Enter))
                 {
-                    if (!treeLock) throw new InvalidOperationException("Texture worker tree-lock call-site mismatch");
-                    code[i].opcode = OpCodes.Call; code[i].operand = AccessTools.Method(typeof(HideoutDecalProbes), nameof(WorkerEnter)); enters++;
+                    if (!treeLock)
+                        throw new InvalidOperationException("Texture worker tree-lock call-site mismatch");
+                    code[i].opcode = OpCodes.Call;
+                    code[i].operand = AccessTools.Method(typeof(HideoutDecalProbes), nameof(WorkerEnter));
+                    enters++;
                 }
                 else if (code[i].Calls(Exit) && treeLock)
                 { code[i].opcode = OpCodes.Call; code[i].operand = AccessTools.Method(typeof(HideoutDecalProbes), nameof(WorkerExit)); exits++; }
             }
-            if (enters != 1 || exits != 1) throw new InvalidOperationException("Texture worker requires exactly one global tree-lock Enter/Exit pair");
+            if (enters != 1 || exits != 1)
+                throw new InvalidOperationException("Texture worker requires exactly one global tree-lock Enter/Exit pair");
             return code;
         }
 
@@ -130,14 +147,16 @@ namespace FuckThisLoadingScreen
         {
             var span = State?.BeginWait("decals.texture-tree.dispose.lock-wait", "Native Monitor.Enter; thread=" + Thread.CurrentThread.ManagedThreadId);
             string outcome = "threw";
-            try { Monitor.Enter(sync); outcome = "acquired"; }
+            try
+            { Monitor.Enter(sync); outcome = "acquired"; }
             finally { try { span?.Finish(outcome); } catch { } }
         }
         internal static void DisposeJoin(Thread thread)
         {
             var span = State?.BeginWait("decals.texture-tree.dispose.join", "Native Thread.Join; joining_thread=" + thread?.ManagedThreadId);
             string outcome = "threw";
-            try { thread.Join(); outcome = "joined"; }
+            try
+            { thread.Join(); outcome = "joined"; }
             finally { try { span?.Finish(outcome); } catch { } }
         }
         internal static void WorkerPrefix() { try { State?.Started(); } catch { } }
@@ -145,14 +164,20 @@ namespace FuckThisLoadingScreen
         internal static void WorkerEnter(object sync)
         {
             var state = State;
-            try { state?.Waiting(); } catch { }
+            try
+            { state?.Waiting(); }
+            catch { }
             Monitor.Enter(sync);
-            try { state?.Acquired(); } catch { }
+            try
+            { state?.Acquired(); }
+            catch { }
         }
         internal static void WorkerExit(object sync)
         {
             Monitor.Exit(sync);
-            try { State?.Released(); } catch { }
+            try
+            { State?.Released(); }
+            catch { }
         }
     }
 }

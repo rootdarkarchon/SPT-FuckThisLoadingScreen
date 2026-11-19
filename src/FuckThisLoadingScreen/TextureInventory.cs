@@ -22,17 +22,23 @@ namespace FuckThisLoadingScreen
             Directory.CreateDirectory(directory);
             string prefix = Path.Combine(directory, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" + label);
             var totals = new SortedDictionary<string, long[]>(StringComparer.Ordinal);
-            long all = 0; int count = 0;
+            long all = 0;
+            int count = 0;
             using (var csv = new StreamWriter(prefix + "-textures.csv", false, new UTF8Encoding(false)))
             {
                 csv.WriteLine(Header);
                 foreach (Texture texture in Resources.FindObjectsOfTypeAll<Texture>())
                 {
-                    if (!texture) continue;
+                    if (!texture)
+                        continue;
                     var row = Describe(texture, out long bytes, out string key);
                     csv.WriteLine(row);
-                    if (!totals.TryGetValue(key, out long[] total)) totals[key] = total = new long[2];
-                    total[0]++; total[1] += bytes; all += bytes; count++;
+                    if (!totals.TryGetValue(key, out long[] total))
+                        totals[key] = total = new long[2];
+                    total[0]++;
+                    total[1] += bytes;
+                    all += bytes;
+                    count++;
                 }
             }
             var summary = new StringBuilder();
@@ -48,7 +54,8 @@ namespace FuckThisLoadingScreen
             }
             summary.AppendLine("estimated_bytes = format size of mips from first_resident_mip (texture arrays x slices, cubemaps x6, render targets x MSAA plus depth). Estimates, not driver residency.");
             summary.AppendLine("key(type|streaming|ignore_limit|limit_group|active_limit|first_resident_mip),textures,estimated_MiB");
-            foreach (var entry in totals) summary.AppendLine(entry.Key + "," + entry.Value[0] + "," + (entry.Value[1] / 1048576.0).ToString("0.0", CultureInfo.InvariantCulture));
+            foreach (var entry in totals)
+                summary.AppendLine(entry.Key + "," + entry.Value[0] + "," + (entry.Value[1] / 1048576.0).ToString("0.0", CultureInfo.InvariantCulture));
             File.WriteAllText(prefix + "-summary.txt", summary.ToString());
             return "Texture inventory written: " + prefix + "-*.txt/csv; textures=" + count + "; estimated=" + (all / 1048576.0).ToString("0", CultureInfo.InvariantCulture) +
                 " MiB; global limit=" + QualitySettings.globalTextureMipmapLimit + "; streaming=" + QualitySettings.streamingMipmapsActive;
@@ -59,26 +66,43 @@ namespace FuckThisLoadingScreen
             int width = texture.width, height = texture.height, mips = Math.Max(1, texture.mipmapCount), depth = 1, faces = 1, samples = 1;
             GraphicsFormat format = texture.graphicsFormat;
             string streaming = "", requested = "", loaded = "", ignore = "", group = "", active = "";
-            int first = 0; long extra = 0;
+            int first = 0;
+            long extra = 0;
             switch (texture)
             {
                 case Texture2D two:
-                    ignore = B(two.ignoreMipmapLimit); group = two.mipmapLimitGroup ?? ""; active = N(two.activeMipmapLimit);
+                    ignore = B(two.ignoreMipmapLimit);
+                    group = two.mipmapLimitGroup ?? "";
+                    active = N(two.activeMipmapLimit);
                     first = Math.Max(0, two.activeMipmapLimit);
                     if (two.streamingMipmaps)
                     {
-                        streaming = "true"; requested = N(two.requestedMipmapLevel); loaded = N(two.loadedMipmapLevel);
-                        if (QualitySettings.streamingMipmapsActive) first = Math.Max(first, two.loadedMipmapLevel);
+                        streaming = "true";
+                        requested = N(two.requestedMipmapLevel);
+                        loaded = N(two.loadedMipmapLevel);
+                        if (QualitySettings.streamingMipmapsActive)
+                            first = Math.Max(first, two.loadedMipmapLevel);
                     }
-                    else streaming = "false";
+                    else
+                        streaming = "false";
                     break;
-                case Texture2DArray array: depth = array.depth; break;
-                case Cubemap _: faces = 6; break;
-                case CubemapArray cubes: faces = 6 * cubes.cubemapCount; break;
-                case Texture3D volume: depth = volume.depth; break;
+                case Texture2DArray array:
+                    depth = array.depth;
+                    break;
+                case Cubemap _:
+                    faces = 6;
+                    break;
+                case CubemapArray cubes:
+                    faces = 6 * cubes.cubemapCount;
+                    break;
+                case Texture3D volume:
+                    depth = volume.depth;
+                    break;
                 case RenderTexture target:
-                    depth = Math.Max(1, target.volumeDepth); samples = Math.Max(1, target.antiAliasing);
-                    if (target.dimension == UnityEngine.Rendering.TextureDimension.Cube) faces = 6;
+                    depth = Math.Max(1, target.volumeDepth);
+                    samples = Math.Max(1, target.antiAliasing);
+                    if (target.dimension == UnityEngine.Rendering.TextureDimension.Cube)
+                        faces = 6;
                     // Depth/stencil buffer: bits per pixel x samples.
                     extra = (long)width * height * target.depth / 8 * samples;
                     break;
@@ -96,7 +120,9 @@ namespace FuckThisLoadingScreen
                 }
             }
             long runtime = 0;
-            try { runtime = Profiler.GetRuntimeMemorySizeLong(texture); } catch { }
+            try
+            { runtime = Profiler.GetRuntimeMemorySizeLong(texture); }
+            catch { }
             string type = texture.GetType().Name;
             key = type + "|" + streaming + "|" + ignore + "|" + group + "|" + active + "|" + N(first);
             return string.Join(",", Q(type), Q(texture.name), N(texture.GetInstanceID()), N(width), N(height), N(depth * faces), N(mips), Q(format.ToString()),

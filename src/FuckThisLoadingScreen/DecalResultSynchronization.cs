@@ -17,7 +17,8 @@ namespace FuckThisLoadingScreen
         internal static void Install(Harmony harmony, Func<string, Type> find, Guid module)
         {
             Type tree = find("TextureQuadTree");
-            if (tree.Module.ModuleVersionId != module) throw new NotSupportedException("Decal result synchronization requires the supported EFT module");
+            if (tree.Module.ModuleVersionId != module)
+                throw new NotSupportedException("Decal result synchronization requires the supported EFT module");
             MethodInfo read = AccessTools.DeclaredMethod(tree, "UpdateTextureRequestedMipMapLevel", Type.EmptyTypes);
             MethodInfo work = AccessTools.DeclaredMethod(tree, "WorkThread", new[] { typeof(object) });
             if (read?.ReturnType != typeof(void) || read.IsStatic || work?.ReturnType != typeof(void) || !work.IsStatic)
@@ -85,12 +86,23 @@ namespace FuckThisLoadingScreen
                     string helper;
                     switch (field.Name)
                     {
-                        case "updatedDuringFrame": helper = nameof(Frame); break;
-                        case "requestedMipMapLevel": helper = nameof(Mip); break;
-                        case "pixelsHBuf": helper = nameof(H); break;
-                        case "pixelsVBuf": helper = nameof(V); break;
-                        case "closestDist": helper = nameof(Distance); break;
-                        default: throw new MissingFieldException("Unknown worker result write: " + field.Name);
+                        case "updatedDuringFrame":
+                            helper = nameof(Frame);
+                            break;
+                        case "requestedMipMapLevel":
+                            helper = nameof(Mip);
+                            break;
+                        case "pixelsHBuf":
+                            helper = nameof(H);
+                            break;
+                        case "pixelsVBuf":
+                            helper = nameof(V);
+                            break;
+                        case "closestDist":
+                            helper = nameof(Distance);
+                            break;
+                        default:
+                            throw new MissingFieldException("Unknown worker result write: " + field.Name);
                     }
                     instruction.opcode = OpCodes.Call;
                     instruction.operand = AccessTools.DeclaredMethod(typeof(DecalResultSynchronization), helper).MakeGenericMethod(field.DeclaringType);

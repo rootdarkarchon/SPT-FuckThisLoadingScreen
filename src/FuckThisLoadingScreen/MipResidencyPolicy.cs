@@ -16,12 +16,16 @@ namespace FuckThisLoadingScreen
         internal static MipResidencyPolicy Install(Harmony harmony, Func<string, Type> find, Guid module)
         {
             Type graphics = find("EFT.Settings.Graphics.GraphicsSettingsController");
-            if (graphics.Module.ModuleVersionId != module) throw new NotSupportedException("Mip residency policy requires the supported EFT module");
+            if (graphics.Module.ModuleVersionId != module)
+                throw new NotSupportedException("Mip residency policy requires the supported EFT module");
             var method = AccessTools.DeclaredMethod(graphics, "RefreshStreamingMemoryBudget");
-            if (method?.ReturnType != typeof(void) || method.IsStatic) throw new MissingMethodException("Mip memory policy ABI");
+            if (method?.ReturnType != typeof(void) || method.IsStatic)
+                throw new MissingMethodException("Mip memory policy ABI");
             harmony.Patch(method, transpiler: new HarmonyMethod(typeof(MipResidencyPolicy), nameof(Guard)),
                 postfix: new HarmonyMethod(typeof(MipResidencyPolicy), nameof(Refreshed)));
-            var policy = new MipResidencyPolicy(); policy.Apply(); return policy;
+            var policy = new MipResidencyPolicy();
+            policy.Apply();
+            return policy;
         }
         internal void Apply()
         { _previous = Texture.streamingTextureDiscardUnusedMips; Texture.streamingTextureDiscardUnusedMips = false; _owns = true; }
