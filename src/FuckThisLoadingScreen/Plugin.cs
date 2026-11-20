@@ -14,9 +14,12 @@ namespace FuckThisLoadingScreen
     [BepInPlugin(PluginInfo.Guid, PluginInfo.Name, PluginInfo.Version)]
     [BepInDependency("com.SPT.custom", BepInDependency.DependencyFlags.HardDependency)]
     [BepInDependency("com.fika.core", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency(FikaHeadlessGuid, BepInDependency.DependencyFlags.SoftDependency)] // Load order only, so the presence check sees it.
     public sealed class Plugin : BaseUnityPlugin
     {
         internal const string SupportedModuleId = "cc2d80b0-6d5b-4cb1-a581-6d2cc901d4c7";
+        /// <summary>Fika headless plugin GUID. Fika.Headless forces EFT's MipStreaming setting off when it loads user settings.</summary>
+        private const string FikaHeadlessGuid = "com.fika.headless";
         internal static ManualLogSource Log;
         private static readonly LogRateLimiter Limiter = new LogRateLimiter(2000);
         private Harmony _harmony;
@@ -30,6 +33,7 @@ namespace FuckThisLoadingScreen
         private Harmony _mipResidencyHarmony;
         private Harmony _mipBudgetHarmony, _decalArrayHarmony, _textureQualityHarmony, _bundlePatchHarmony;
         private bool _mipBudgetPumpFailed;
+        private GameMipStreaming _streamableGate; // Set while the streamable texture patch waits for EFT's loaded settings.
         private sealed class RunReport { internal string Summary; internal LoadingRun Run; }
         private readonly Queue<RunReport> _reports = new Queue<RunReport>();
 
@@ -109,7 +113,12 @@ namespace FuckThisLoadingScreen
                 if (Settings.Enabled.Value)
                     TryStart("Texture quality with streaming", StartTextureQualityWithStreaming, StopTextureQualityWithStreaming);
                 if (Settings.Enabled.Value && markStreamable)
-                    TryStart("Streamable texture patch", StartStreamingBundlePatch, StopStreamingBundlePatch);
+                {
+                    if (BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey(FikaHeadlessGuid))
+                        LogDebug("Streamable texture patch not armed and item bundles not scanned: Fika headless client.");
+                    else
+                        TryStart("Streamable texture patch gate", () => _streamableGate = GameMipStreaming.Bind(Find), () => _streamableGate = null);
+                }
                 TryStart("Streaming budget measurement", StartStreamingBudgetMeasurement, StopStreamingBudgetMeasurement);
                 if (researchEnabled)
                     TryStart("Hideout research", StartHideoutResearch, StopHideoutResearch);
@@ -140,6 +149,30 @@ namespace FuckThisLoadingScreen
                 Log.LogWarning("Could not move data from the old BepInEx/" + PluginInfo.ModName + " folder; it stays where it is: " + error.Message);
                 return "";
             }
+        }
+
+        /// <summary>
+        /// Arms the streamable texture patch, and with it the item bundle scan, once EFT has loaded its settings and only when mip
+        /// streaming is on: streamable flags have no effect otherwise. Decided once per process, so enabling mip streaming needs a restart.
+        /// </summary>
+        private void PumpStreamableGate()
+        {
+            if (_streamableGate == null || !_streamableGate.Loaded())
+                return;
+            GameMipStreaming gate = _streamableGate;
+            _streamableGate = null;
+            bool enabled;
+            try
+            { enabled = gate.Enabled(); }
+            catch (Exception error)
+            {
+                Logger.LogError("Streamable texture patch stays off: EFT's mip streaming setting could not be read: " + error);
+                return;
+            }
+            if (enabled)
+                TryStart("Streamable texture patch", StartStreamingBundlePatch, StopStreamingBundlePatch);
+            else
+                LogDebug("Streamable texture patch not armed and item bundles not scanned: mip streaming is off in EFT's settings. Restart after enabling it.");
         }
 
         /// <summary>Runs one feature's start-up; on failure runs <paramref name="cleanup"/>, logs one error and leaves the feature off.</summary>
@@ -284,6 +317,7 @@ namespace FuckThisLoadingScreen
             if (Settings.DumpRequested)
                 DumpTextures();
             PumpStreamingBudgetMeasurement();
+            PumpStreamableGate();
             try
             { StreamingBundlePatch.Active?.Sweep(Time.realtimeSinceStartupAsDouble * 1000); }
             catch (Exception error) { Logger.LogError("Streamable texture patch stream cleanup failed: " + error); }
@@ -440,6 +474,7 @@ namespace FuckThisLoadingScreen
             StopDecalResultsFix();
             StopDecalArrayResync();
             StopTextureQualityWithStreaming();
+            _streamableGate = null;
             StopStreamingBundlePatch();
             StopStreamingBudgetMeasurement();
             StopTextureWorkerFix();

@@ -11,7 +11,7 @@ Read `skill://tarkov-modding` before any work in this repo. It holds the shared 
 - Native call-site guards and the `__runOriginal` contract are load-bearing. A prefix that substitutes a result returns `false`; a patch must not run its work when an earlier prefix already skipped the original.
 - Rupture interop: `StreamingBundlePatch.Install` patches `AssetBundle.LoadFromFileAsync(string)` at `Priority.Last`. Rupture's `ClothingBundleHooks.BeforeFileLoad` (default priority) substitutes staged clothing bundles and returns `false`; FTLS then sees `__runOriginal == false` and does nothing. Keep FTLS's priority at `Last` so that ordering holds.
 - Stage timer: the `FTLS.LevelStageTimer` companion lives on branch `research/startup` and is not part of this tree.
-- Fika: `com.fika.core` is a soft dependency only. No Fika type is referenced by `src/`. Do not claim headless-specific behaviour without code that checks for it.
+- Fika: `com.fika.core` and `com.fika.headless` are soft dependencies only. No Fika type is referenced by `src/`. The only headless-specific code is in `Plugin.Awake`: Mark Item Textures Streamable and its bundle scan stay off when `com.fika.headless` is loaded. Do not claim other headless-specific behaviour without code that checks for it.
 - Runtime files go under `ModPaths` (`BepInEx/config/FuckThisLoadingScreen/<kind>/`). Do not write to `BepInEx/FuckThisLoadingScreen/` any more; that path is only read by the one-time migration.
 - Machine paths: never write a literal install path into tracked files. Use `TARKOV_SPT_INSTALL`.
 - Do not commit unless asked.
@@ -39,4 +39,4 @@ Defined in `src/FuckThisLoadingScreen/Plugin.cs` (config binding) and `src/FuckT
   - texture inventory → `BepInEx/config/FuckThisLoadingScreen/dumps/texture-inventory/`
   - streaming budget measurements → `BepInEx/config/FuckThisLoadingScreen/dumps/streaming-budget/`
   - `StreamableTextureIndex.txt` → `BepInEx/config/FuckThisLoadingScreen/cache/StreamableTextureIndex.txt`
-- Dependencies declared in `Plugin.cs`: `com.SPT.custom` (hard), `com.fika.core` (soft; no Fika-specific code).
+- Dependencies declared in `Plugin.cs`: `com.SPT.custom` (hard), `com.fika.core` (soft; no Fika-specific code), `com.fika.headless` (soft; load order for the presence check above).

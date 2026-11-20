@@ -241,6 +241,8 @@ internal static class MipStreamingValidation
     }
     internal static void Installed(Action<bool, string> check, Func<string, Type> find)
     {
+        GameMipStreaming settings = GameMipStreaming.Bind(find);
+        check(!settings.Loaded(), "EFT mip streaming setting binds to the installed SettingsManager and reports no loaded settings outside the game");
         var harmony = new Harmony("ftls.mip.installed");
         try
         {

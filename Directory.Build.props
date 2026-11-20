@@ -3,7 +3,7 @@
        generated PluginInfo.g.cs (Directory.Build.targets) and scripts/Build.ps1. -->
   <PropertyGroup>
     <ModName>FuckThisLoadingScreen</ModName>
-    <PluginName>FuckThisLoadingScreen</PluginName>
+    <PluginName>Fuck This Loading Screen</PluginName>
     <HasClient>true</HasClient>
     <HasServer>false</HasServer>
     <PluginGuid>com.rootdarkarchon.fuckthisloadingscreen</PluginGuid>

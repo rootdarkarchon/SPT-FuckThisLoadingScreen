@@ -87,7 +87,7 @@ Experimental options are off by default. Settings are grouped into numbered BepI
 | Mip Streaming / Release Icon Mip Requests | true | false at startup retains native icon lifetimes; restart required |
 | Mip Streaming / Account For Nonstreaming Textures | true | false retains the previous budget; requires icon lifetimes; restart required |
 | Mip Streaming / Apply Texture Quality With Streaming | true | false retains EFT's limit 0 with streaming on; restart required |
-| Mip Streaming / Mark Item Textures Streamable | true | false loads item/weapon bundles natively; restart required |
+| Mip Streaming / Mark Item Textures Streamable | true | false loads item/weapon bundles natively; skipped (no bundle scan) when EFT's loaded mip streaming setting is off or on a Fika headless client; restart required, also after enabling mip streaming |
 | Mip Streaming / Streaming Budget Override | 0 | MiB. 0 keeps EFT's per-map budget; above 0 replaces it (higher or lower) on every map; needs Account For Nonstreaming Textures; applies within 500 ms |
 | Mip Streaming / Measure Streaming Budget | button | "Measure streaming budget (60 s)" samples this GPU in a raid and shows a recommendation in the menu |
 | Mip Streaming / Apply Measured Budget | button | Sets Streaming Budget Override to the last recommendation |
@@ -196,10 +196,12 @@ files are still controlled by **Debug / Write Loading Reports**.
 
 ## Fika
 
-FTLS declares `com.fika.core` as a soft dependency and contains no Fika-specific
-code. It patches the EFT client loading path listed in
-[docs/patch-targets.md](docs/patch-targets.md). Behaviour on a headless Fika host
-has not been verified.
+FTLS declares `com.fika.core` and `com.fika.headless` as soft dependencies and
+references no Fika type. It patches the EFT client loading path listed in
+[docs/patch-targets.md](docs/patch-targets.md). The only headless-specific code:
+when the `com.fika.headless` plugin is loaded, Mark Item Textures Streamable stays
+off and the item bundle scan does not run (Fika.Headless forces EFT's mip streaming
+off). Other behaviour on a headless Fika host has not been verified.
 
 ## Build from source
 

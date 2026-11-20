@@ -65,6 +65,13 @@ Reduces the fixed 500 ms initial batch waits in the bot profile loader to 1 ms.
 | --- | --- | --- | --- |
 | `UnityEngine.AssetBundle` | `LoadFromFileAsync(string)` | prefix at `Priority.Last` | Streamable texture index substitution. Runs after Rupture's `ClothingBundleHooks` prefix, which returns `false` for staged bundles. |
 
+Startup gate (`Plugin.PumpStreamableGate`, `GameMipStreaming`; verified against EFT 0.16.9.40743): the patch and its background index scan are armed only after EFT has loaded its settings, and not at all when
+
+- BepInEx has loaded `com.fika.headless` (soft dependency for load order only; Fika.Headless's `SettingsPatch` sets `MipStreaming` to false), or
+- the loaded setting is false: `Comfort.Common.Singleton<EFT.Settings.SettingsManager>.Instance.Graphics` (field) `.Settings` (field on `SettingsManager.SettingsWithProvider<GraphicsSettingsGroup>`) `.MipStreaming` (`Bsg.GameSettings.GameSetting<bool>` field on `EFT.Settings.Graphics.GraphicsSettingsGroup`) `.Value`. `Plugin.Update` polls `Singleton<SettingsManager>.Instantiated` until it is true; `SettingsManager.InstantiateSingleton` creates the singleton only after `Load`, so the value is the loaded one.
+
+The live object is read instead of `Graphics.ini` because SPT's `SaveSettingsToSptFolderPatch` (SPT.Custom) redirects `SettingsManager.SettingsFolderPath` to `SPT_Runtime/user/sptSettings`; the `%APPDATA%` file is the live EFT client's. EFT applies a changed `MipStreaming` live (`GraphicsSettingsController` binding → `QualitySettings.streamingMipmapsActive`), but the gate decides once per process, so item textures are marked only after a restart.
+
 ## Spawn zones (`SpawnZoneHooks`)
 
 | Target | Members | Kinds | Feature |

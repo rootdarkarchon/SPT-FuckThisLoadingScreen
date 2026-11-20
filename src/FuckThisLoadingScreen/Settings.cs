@@ -142,7 +142,8 @@ namespace FuckThisLoadingScreen
                 Describe(MipStreamingCategory, "Mark item textures streamable", 50,
                     "While EFT loads its item and weapon bundles, present eligible textures (mipmapped, not CPU-readable, not already streaming) as " +
                     "mip-streamable so they stream instead of loading at full size. Bundle files are read through a patching stream; nothing is written to disk " +
-                    "except a small offset index, built once in the background after install or a game update. Restart required."));
+                    "except a small offset index, built once in the background after install or a game update. Armed once EFT has loaded its settings, and " +
+                    "skipped (no scan, no patch) when mip streaming is off there or on a Fika headless client. Restart required, also after enabling mip streaming."));
             StreamingBudgetOverride = config.Bind("Mip Streaming", "Streaming Budget Override", 0,
                 Describe(MipStreamingCategory, "Streaming budget override", 40,
                     "Upper limit in MiB for streamed textures on this GPU, applied on every map. Replaces EFT's per-map streaming budget, higher or lower; " +

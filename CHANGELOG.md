@@ -133,6 +133,10 @@ Both need a restart after changing. With streaming off they do nothing.
   `AssetsTools.NET.dll` and its license (`AssetsTools.NET-LICENSE.txt`).
   The first live test scanned on the load path (about 167 ms per bundle, 33 s per 200
   bundles), which slowed loot loading by 10–20 s; the background index replaces it.
+  The patch and the scan are armed once EFT has loaded its settings and are skipped
+  when its mip streaming setting is off, and on a Fika headless client
+  (`com.fika.headless` loaded); with streaming off the flags had no effect. After
+  enabling mip streaming, restart once so the scan runs.
 
 **First live Streets results** (mip streaming on, 24 GB GPU, Task Manager peak
 dedicated memory; texture inventory estimates in parentheses): High 14.5 GB;
