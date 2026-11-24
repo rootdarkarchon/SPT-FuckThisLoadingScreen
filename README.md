@@ -4,7 +4,7 @@
 It is an independent BepInEx client mod. Every optimization has a configuration
 switch, so you can compare it with the native loading path.
 
-Current version: **1.1.0**. Version history and per-release details are in
+Current version: **1.1.1**. Version history and per-release details are in
 [CHANGELOG.md](CHANGELOG.md).
 
 ## Compatibility

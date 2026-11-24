@@ -501,6 +501,7 @@ public static class FTLSValidation
             MipBudgetAccountingValidation.Installed(Check, find);
             StreamingBudgetValidation.Installed(Check, find);
             IconMipProbeValidation.Installed(Check, find, Path.GetDirectoryName(installFile));
+            IconRenderRecoveryValidation.Installed(Check, find);
             DecalMipProbeValidation.Installed(Check, find, Path.GetDirectoryName(installFile));
             DecalTextureArrayResyncValidation.Installed(Check, find);
             TextureQualityWithStreamingValidation.Installed(Check, find);

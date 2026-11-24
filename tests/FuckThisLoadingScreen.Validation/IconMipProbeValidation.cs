@@ -134,7 +134,7 @@ internal static class IconMipProbeValidation
         }
         fields.Add(field.ToString()); return fields.ToArray();
     }
-    private sealed class Pump : SynchronizationContext
+    internal sealed class Pump : SynchronizationContext
     {
         private readonly Queue<Action> _queue = new Queue<Action>();
         public override void Post(SendOrPostCallback callback, object state) { lock (_queue) _queue.Enqueue(() => callback(state)); }

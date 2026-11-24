@@ -117,6 +117,11 @@ The live object is read instead of `Graphics.ini` because SPT's `SaveSettingsToS
 - `IconCreatorGraphicsSettings`: fields `_requests`, `_mipBudget`, `_textures2d`; `RequestMipZero`, `RequestMipZeroFast` (prefix); `Prepare`, `Restore` (prefix).
 - `EFT.Settings.Graphics.GraphicsSettingsController`: `IncreaseMemoryBudgetForIcon`, `RestoreMemoryBudget` (prefix); `RefreshStreamingMemoryBudget` (postfix); static fields `MipStreamingMemoryBudget` (float), `StreamingMipmapsMaxLevelReduction` (int).
 - `EFT.CameraControl.CameraManager`: `IncreaseStreamingMipMapBias` (prefix); static `instance`; field `_streamingController`.
+- `IconCreatorBase<Item, ItemIcon>` (closed base of `ItemIconCreator`): fields `_memoryCacheIndex` (`Dictionary<int, ItemIcon>`), `_isIconCreating` (bool); `CaptureSpriteOfModel` (3 params; prefix, postfix, finalizer). The method lives on a generic base, so the patch applies to the shared reference-type code; both hooks act only for the item creator of the current render scope.
+- `IconCreatorBase<Item, ItemIcon>.RenderModelResult`: field `sprite` (`Sprite`).
+- `IconsHash.GetItemHash(Item)` (static, int); `ItemIcon.Sprite` (property); `EFT.InventoryLogic.Item.Prefab` (`ResourceKey`, field `path`).
+- Icon mip requests target `Texture2D.activeMipmapLimit` (clamped to the mip chain) instead of EFT's mip 0, for requested and minimum levels; cleanup restores only values that still equal the level this render wrote.
+- Recovery (verified against EFT 0.16.9.40743): destroyed textures count as loaded during the mip wait; a render that fails or returns no sprite removes its own sprite-less `_memoryCacheIndex` entry (only if still the same object); a throwing capture inside a cache fill clears `_isIconCreating`. With Debug / Logging, renders running longer than 10 s are reported once with their stage, and item render stage timings are summarised once a batch of renders drains (at most every 5 s while renders continue).
 - Feature: Release Icon Mip Requests.
 
 ### Icon mip probes (`IconMipProbe`, diagnostic)

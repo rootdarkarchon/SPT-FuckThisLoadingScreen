@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.1.1
+
+### Fixed
+
+- **Slow item icons at Medium/Low texture quality** (Mip Streaming / Release Icon
+  Mip Requests). With **Apply Texture Quality With Streaming**, Medium and Low keep a
+  mipmap limit above 0, so mip 0 of a limited texture can never become resident. EFT's
+  icon request for mip 0 then waited the full 200 frames (about 3.4 s at 60 fps) for
+  every render with streamed textures, and EFT skipped saving those icons to its icon
+  cache, so they rendered slowly again every session. Icon renders now request the
+  highest mip the current texture quality allows (`Texture2D.activeMipmapLimit`); at
+  High (limit 0) this is still mip 0. Measured on a user's Medium setup with 1.1.1
+  timing logs: streamed item renders hit the 200-frame limit (3.3–4.4 s mip wait)
+  while bundles, capture and queue took milliseconds to a few hundred.
+
+- **Icons stuck on the loading circle** (Mip Streaming / Release Icon Mip Requests).
+  With mip streaming on, each icon render waits up to 200 frames for mip 0, long
+  enough for its textures or model to be torn down mid-render (for example around a
+  raid transition). EFT then never produces a sprite and keeps the empty icon cached
+  for the rest of the session, also in the stash. Now:
+  - a texture destroyed during the mip wait counts as loaded instead of failing the
+    render;
+  - a render that fails or returns no sprite removes its own empty cache entry, so the
+    next inventory refresh (reopening the stash or inventory) renders the icon again;
+  - a capture that throws while holding EFT's icon capture flag releases it, so later
+    icons are not blocked behind it.
+- **Icon render watchdog** (Debug / Logging). Item and player icon renders still
+  running after 10 s are logged once with their stage (bundles/prefab/budget wait,
+  mip wait, camera/capture queue, capture, finish), the item prefab and the
+  shared icon counters; the finish of a reported render is logged too.
+- **Icon render timing** (Debug / Logging). Once a batch of item icon renders
+  finishes (at most every 5 s while renders continue), one line summarises them:
+  count, failures, total and per-stage mean/max milliseconds (bundles/prefab/budget
+  wait, mip wait, camera/capture queue, capture, finish), mip-wait frames and texture
+  count, plus frame time, Unity's async upload slice and buffer, streaming budget,
+  maximum level reduction and file IO request limit, and the slowest render's
+  breakdown with its prefab.
+
 ## 1.1.0
 
 Released as one build. Versions 1.0.2 through 1.0.10 were development builds and

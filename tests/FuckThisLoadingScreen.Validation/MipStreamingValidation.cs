@@ -192,7 +192,7 @@ internal static class MipStreamingValidation
             SynchronizationContext.SetSynchronizationContext(oldContext);
         }
     }
-    private static Texture2D CreateStreamingTexture(string path = "Assets/ftls-streaming-lifetime.png", int size = 64)
+    internal static Texture2D CreateStreamingTexture(string path = "Assets/ftls-streaming-lifetime.png", int size = 64)
     {
         var source = new Texture2D(size, size, TextureFormat.RGBA32, true);
         try { File.WriteAllBytes(path, source.EncodeToPNG()); } finally { UnityEngine.Object.DestroyImmediate(source); }

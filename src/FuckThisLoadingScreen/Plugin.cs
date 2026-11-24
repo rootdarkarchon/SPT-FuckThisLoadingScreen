@@ -316,6 +316,9 @@ namespace FuckThisLoadingScreen
                 FlushReports();
             if (Settings.DumpRequested)
                 DumpTextures();
+            try
+            { if (_iconMipsArmed && Settings.DebugLogging.Value) IconMipLifetime.Pump(); }
+            catch (Exception error) { IconMipLifetime.DebugLog = null; IconMipLifetime.TimingLog = null; Logger.LogError("Icon render watchdog stopped after an error: " + error); }
             PumpStreamingBudgetMeasurement();
             PumpStreamableGate();
             try
@@ -522,6 +525,9 @@ namespace FuckThisLoadingScreen
         {
             _iconMipHarmony = new Harmony(PluginInfo.Guid + ".icon-mip-lifetimes");
             IconMipLifetime.Warning = text => Logger.LogWarning(text);
+            IconMipLifetime.DebugLog = text => LogDebugLimited("icon-render", text);
+            IconMipLifetime.TimingLog = text => LogDebugLimited("icon-timing", text);
+            IconMipLifetime.DebugEnabled = () => Settings.DebugLogging.Value;
             IconMipLifetime.Install(_iconMipHarmony, Find, new Guid(SupportedModuleId));
             _iconMipsArmed = true;
             LogDebug("Item/player icon mip lifetimes armed; overlapping renders share texture, memory-budget and camera-bias ownership.");
